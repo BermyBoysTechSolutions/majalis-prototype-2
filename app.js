@@ -1,4 +1,4 @@
-import { VideoPlayer } from './video-player.js?v=room-5';
+import { VideoPlayer } from './video-player.js?v=room-6';
 
 const root = document.documentElement;
 const chapters = [...document.querySelectorAll('.chapter')];
@@ -65,7 +65,7 @@ function measure() {
   maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
   targetScroll = Math.max(0, Math.min(maxScroll, scrollY));
   if (Math.abs(measuredWidth - innerWidth) > 2) {
-    navigation = null;
+    cancelNavigation();
     currentScroll = presentationScroll = targetScroll;
   }
   measuredWidth = innerWidth;
@@ -137,6 +137,7 @@ function render(position, delta = 16.67) {
   let visualTarget = position;
   if (!reduced.matches) {
     player.request(desired.frame);
+    if (!navigation && desired.frame === 0 && player.frame < .03) player.setNavigationSpeed();
     if (Math.abs(player.frame - desired.frame) > 1.1) visualTarget = cameraPosition(player.frame);
   }
   if (reduced.matches) presentationScroll = visualTarget;
@@ -206,6 +207,7 @@ function jump(index, instant = false) {
   const available = index === 6 ? maxScroll - entry.top : entry.height;
   const top = index === 0 ? 0 : entry.top + available * .66;
   const to = Math.min(maxScroll, top);
+  player.setNavigationSpeed();
   if (instant || reduced.matches) {
     navigation = null;
     player.snap(checkpoints[index]);
@@ -213,8 +215,11 @@ function jump(index, instant = false) {
     targetScroll = currentScroll = presentationScroll = scrollY;
   } else {
     const distance = Math.abs(checkpoints[index] - player.frame);
+    const home = index === 0;
+    if (home) player.setNavigationSpeed(2);
     navigation = { from: scrollY, to, fromFrame: player.frame, toFrame: checkpoints[index],
-      started: 0, duration: Math.max(1900, distance / 24 / 3.3 * 1000 + 600) };
+      started: 0, duration: home ? Math.max(1100, (distance / 24 / 3.3 * 1000 + 600) / 2) :
+        Math.max(1900, distance / 24 / 3.3 * 1000 + 600) };
   }
   wake();
   history.replaceState(null, '', `#${chapters[index].id}`);
@@ -234,7 +239,7 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     } else jump(index);
   });
 });
-function cancelNavigation() { navigation = null; }
+function cancelNavigation() { navigation = null; player.setNavigationSpeed(); }
 addEventListener('wheel', cancelNavigation, { passive: true });
 addEventListener('touchstart', () => { cancelNavigation(); player.unlock(); }, { passive: true });
 addEventListener('pointerdown', () => { cancelNavigation(); player.unlock(); }, { passive: true });
@@ -264,7 +269,7 @@ let interest = 'MAJALIS';
 function openDialog(dialog, trigger) {
   dialogTrigger = trigger;
   modalOpen = true;
-  navigation = null;
+  cancelNavigation();
   player.pause();
   cancelAnimationFrame(raf); raf = 0; previousTime = 0;
   document.body.classList.add('dialog-open');

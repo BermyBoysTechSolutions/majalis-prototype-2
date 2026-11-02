@@ -56,3 +56,10 @@ Native Chrome checks passed all seven sections at390×844,430×932,320×667 and3
 Owner's iPhone screenshot exposed an overlap at a393×664 CSS viewport: the absolutely positioned CTA began21.25px above the bottom of the topic tags. Mobile card contents now use a column layout with a normal-flow action row and explicit separation after tags. The fixed outer card frame remains unchanged. A stable-height short-screen typography mode also covers wider phones whose browser chrome leaves less vertical room. The closing login link participates in normal flow as well.
 
 Native Chrome checked all seven sections at393×664,390×640,390×740,390×844,320×568,320×667 and430×932 (49 layouts). Minimum measured content-to-button gap16.98px; no CTA clipping, internal card scrolling, navigation overlap, horizontal overflow or card movement. Before/after screenshots and report: local `output/majalis-p2/cta-overlap-*` and `cta-spacing-qa.json`. These are emulated viewport checks; the owner's supplied screenshot is the physical-phone evidence of the original bug.
+
+
+## Faster Home return — 2026-11-02
+
+Home/logo shortcuts now use a2× navigation speed multiplier: half-duration camera-path easing and up to8× native reverse playback instead of the ordinary4× limit. All intermediate scenes remain in the route. Arrival, manual interruption, another shortcut, modal opening, substantial width reflow or clearing the player restores the normal speed policy. Browsers rejecting the higher playback rate fall back to the existing4× limit. Reduced-motion navigation stays immediate.
+
+Native Chrome full returns from frame869 to0 took6.77s at393×664 and6.85s at1440×900. Both visited chapters6,5,4,3,2,1,0 in order, presented160/161 camera frames during the return, reported no media errors and retained at most three videos. Tests also confirmed normal chapter controls keep their4× rate limit, and a wheel interruption cancels the Home shortcut and removes its boost. These are local browser timings, not a guarantee for every decoder or connection. Evidence: local `output/majalis-p2/faster-home-qa.json`.

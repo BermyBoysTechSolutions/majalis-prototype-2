@@ -9,6 +9,8 @@ export class VideoPlayer {
     this.pool = new Map();
     this.frame = this.goal = 0;
     this.goalChanged = performance.now();
+    this.navigationSpeed = 1;
+    this.maxPlaybackRate = 8;
     this.direction = 1;
     this.active = this.visible = null;
     this.warmKey = '';
@@ -172,8 +174,12 @@ export class VideoPlayer {
       this.seekFallback();
       return;
     }
-    const rate = clamp(remaining / FPS * 3.5, .8, 4);
-    if (Math.abs(record.video.playbackRate - rate) > .08) record.video.playbackRate = rate;
+    const rate = clamp(remaining / FPS * 3.5 * this.navigationSpeed, .8,
+      Math.min(4 * this.navigationSpeed, this.maxPlaybackRate));
+    if (Math.abs(record.video.playbackRate - rate) > .08) {
+      try { record.video.playbackRate = rate; }
+      catch { this.maxPlaybackRate = 4; record.video.playbackRate = Math.min(4, rate); }
+    }
     if (record.video.paused && !record.playPending) {
       record.playPending = true;
       this.stats.plays++;
@@ -213,6 +219,7 @@ export class VideoPlayer {
   draw() { return Boolean(this.visible?.hasFrame); }
   warm() {} // Playback preloads the next camera move, never the entire tour.
   pumpWarm() { this.wake(); }
+  setNavigationSpeed(speed = 1) { this.navigationSpeed = clamp(speed, 1, 2); }
   pause() { this.suspended = true; this.active?.video.pause(); clearTimeout(this.timer); this.timer = 0; }
   resume() { this.suspended = false; this.wake(); }
   unlock() {
@@ -288,6 +295,7 @@ export class VideoPlayer {
   }
 
   clear() {
+    this.setNavigationSpeed();
     clearTimeout(this.timer); this.timer = 0;
     for (const key of [...this.pool.keys()]) this.release(key);
     this.active = this.visible = null;
@@ -300,6 +308,7 @@ export class VideoPlayer {
       activeVideos: this.pool.size, videoLimit: 3, sourceFrame: this.frame, targetFrame: this.goal,
       sourceFrames: LAST + 1, moving: Boolean(record && (!record.video.paused || record.aligning)),
       blocked: this.blocked, unavailable: this.unavailable, direction: this.direction, rate: record?.video.playbackRate ?? 0,
+      navigationSpeed: this.navigationSpeed,
       videoSize: record ? [record.video.videoWidth, record.video.videoHeight] : [0, 0] };
   }
 }
