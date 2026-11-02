@@ -1,25 +1,32 @@
-# Prototype 2 motion direction
+# Prototype 2 — the majlis room journey
 
-Prototype 1 is preserved at https://github.com/BermyBoysTechSolutions/majalis-prototype/tree/prototype-1 and its existing Pages URL. This is an independent repository and design.
+## Revised goal
 
-## Public reference study
+Preserve Prototype 1. Build an original MAJALIS experience around one coherent stylized 3D CGI Arabian majlis. Scrolling will move the camera through the five activity areas of the same room, using a user-generated Veo video. The earlier particle-based direction was rejected as too similar to the reference and is superseded; its research is retained in `reference-study-archive.md`.
 
-The rendered homepage and public `routes-DsZetEw4.js` bundle of https://thecompanionscollective.com/ reveal a custom WebGL POINTS renderer, a second 2D canvas for labels, generated point positions sampled from SVG illustrations, staggered swirling morphs, scroll-velocity deformation, and spring-smoothed chapter progress. Its public configuration uses roughly 9,600 desktop / 6,000 compact points. The application is React-based and exposes Motion scroll utilities. The main scene is a pinned viewport with chapter navigation; the phone layout retains the particle artwork. No private server source was accessible or inspected.
+## Fixed art requirements
 
-Source inspected: https://thecompanionscollective.com/assets/routes-DsZetEw4.js and https://thecompanionscollective.com/assets/hero-section-I_hpMUIY.js . Reference source and screenshots are retained locally outside this repository. No reference illustrations, text, crest, or implementation code are copied into this prototype.
+- Premium digitally rendered 3D environment, not live-action photography or a flat cartoon.
+- One connected room with Islamic geometric mosaics, arches, green seating, warm cream plaster, wood and brass.
+- Rear-left Quran study; rear-right technology; front-right business; front-left health and fitness; central community gathering.
+- Mostly men. Current starting frame has seven men and one modestly dressed woman at the computer.
+- All faces completely featureless; prefer back and rear three-quarter views. No eyes, eyebrows, nose, mouth, facial hair, expressions, or facial details in reflections/screens.
+- Fitness is a man lifting dumbbells. Loose opaque full-length trousers and a long-sleeved top extending below the hips keep his torso, hips, thighs and knees covered throughout the animation.
+- Modest loose full-length clothing throughout. Do not claim religious certification of the artwork.
+- No Arabic or other generated writing, labels, calligraphy, logos or UI baked into the video.
+- Same room, furniture, people, materials, and light across all shots. No disconnected rooms or montage.
 
-## MAJALIS implementation
+## Camera and implementation
 
-- Seven continuous scroll chapters: introduction, Islamic knowledge, health, business, technology, community, and purposeful growth.
-- Original vector drawings sampled once into a deterministic particle field.
-- GPU shader performs stagger, vortex scatter, depth, color interpolation, and reassembly; buffers change only when the chapter pair changes.
-- Native scroll timelines drive masked line reveals and layered atmosphere; no scroll jacking, cursor repulsion, or mandatory scroll snapping.
-- A second pinned sequence unfolds three learning cards from a 3D fan into a readable layout with hover feedback.
-- Native Chrome only for preview. Phone keeps the same art and choreography, fitted to a stable touch viewport.
-- Shared SVG icons; no emoji substitutions or Arabic text.
-- Sign up / Log in retain honest account-preview behavior; no credentials or accounts are collected.
-- Reduced motion uses the same vector artwork in normal document flow. WebGL failure has an SVG fallback.
+A continuous tour starts with the whole room, then approaches study, technology, business, fitness, and community, before returning to an overview. The user will animate the supplied starting image in Veo/Flow and return the video. Website scroll will control movement through that supplied camera journey; it must include readable viewing intervals and retain the same artwork on mobile.
 
-## Acceptance
+Keep native Chrome preview, touch-friendly responsive layouts, shared vector icons, reduced-motion behavior, and honest Sign up / Log in account-preview CTAs. No actual account backend exists yet.
 
-Confirm desktop / 390x844 / 320x568 / phone landscape layouts, functional chapter navigation and account dialog, readable hold intervals, working reduced motion / WebGL fallback, no script errors, frame cadence on the attached 60Hz display, independent GitHub repository and deployed Pages URL. Do not claim actual 120Hz or physical phone measurements.
+## Current assets and next dependency
+
+- `assets/majlis-room-start-v1.png`: preserved initial image.
+- `assets/majlis-room-start-v2.png`: current mostly-men/dumbbell revision, generated with the built-in image tool, 1672 × 941.
+- `docs/majlis-video-prompts.md`: generation prompts, the first image-to-video prompt, and connected extension prompts.
+- Next dependency: user-generated Veo video before replacing the exploratory renderer and validating/publishing the finished room-based site.
+
+Prototype 1 remains at its existing GitHub Pages URL and its `prototype-1` tag. Prototype 2 is not yet a finished room-based website.

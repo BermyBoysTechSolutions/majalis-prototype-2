@@ -1,28 +1,22 @@
 # MAJALIS — Prototype 2
 
-An independent, animation-focused second direction for the MAJALIS Muslim educational platform. Prototype 1 remains preserved in its original repository and `prototype-1` tag.
+The current direction is an original 3D CGI majlis camera journey. A starting image and Veo prompts are ready; video generation and integration are the next steps. The earlier particle narrative was an exploratory direction and has been superseded by the user's room concept.
 
-- Prototype 2: https://bermyboystechsolutions.github.io/majalis-prototype-2/
-- Prototype 1: https://bermyboystechsolutions.github.io/majalis-prototype/
+- [Current starting image](assets/majlis-room-start-v2.png)
+- [Full Veo animation and continuation prompts](docs/majlis-video-prompts.md)
+- [Revised goal and art requirements](docs/motion-direction.md)
+- [Preserved Prototype 1](https://bermyboystechsolutions.github.io/majalis-prototype/)
 
-## Motion
+The room connects Quran learning, technology, business, health/fitness, and community. Figures have featureless faces and modest clothing; the gathering is predominantly men, with a fully covered man lifting dumbbells in the fitness area. No Arabic writing is included in the artwork.
 
-Seven original vector illustrations become a 5,600-point WebGL field. A custom GPU shader handles staggered scatter, vortex motion, depth, color interpolation, and reassembly as the user scrolls. The JavaScript loop updates uniforms; geometry is uploaded only when the active scene pair changes.
+The user will generate a connected camera tour in Veo/Flow and return it for scroll-controlled website integration. Native Chrome, mobile readability, reduced motion, and Sign up / Log in CTAs remain requirements. Account previews collect no credentials; authentication is not connected.
 
-Native browser scroll timelines handle masked typography, atmosphere, and a 3D fan-to-grid learning-card sequence. Phones retain the same particle artwork, with a scroll-driven card deck that leaves room for readable text.
+## Local exploratory build
 
-There is no video, scroll-jacking library, or mandatory scroll snapping. Reduced motion uses the same vectors in normal document flow. WebGL and scroll-timeline fallbacks are included. Icons are shared SVG designs; there is no Arabic text.
-
-## Local preview
+The existing source files are the superseded particle experiment, retained until the room video is supplied:
 
 ```sh
 python3 -m http.server 4174 --bind 127.0.0.1
 ```
 
-Open http://127.0.0.1:4174/ in native Chrome. No build or dependency installation is needed. GitHub Pages serves the repository root from `main`.
-
-## Reference and limits
-
-See [the public reference study and motion direction](docs/motion-direction.md). All MAJALIS illustrations and motion code are original to this prototype; the reference site's illustrations, text, and crest are not included.
-
-Sign up / Log in open an explicit coming-soon account preview. Authentication, credential collection, courses, payments, and member accounts are not connected.
+Prototype 1 remains unchanged in its own repository and tag. The reference study is archived in `docs/reference-study-archive.md`.
