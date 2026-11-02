@@ -1,4 +1,4 @@
-import { VideoPlayer } from './video-player.js?v=room-4';
+import { VideoPlayer } from './video-player.js?v=room-5';
 
 const root = document.documentElement;
 const chapters = [...document.querySelectorAll('.chapter')];
@@ -54,10 +54,12 @@ function measure() {
       root.style.setProperty('--mobile-stage-height', `${mobileStageHeight}px`);
     }
     root.classList.toggle('compact-mobile-stage', mobileStageHeight <= 620);
+    root.classList.toggle('short-mobile-stage', mobileStageHeight <= 740);
   } else {
     mobileStageWidth = mobileStageHeight = 0;
     root.style.removeProperty('--mobile-stage-height');
     root.classList.remove('compact-mobile-stage');
+    root.classList.remove('short-mobile-stage');
   }
   dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top + scrollY, height: section.offsetHeight }));
   maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);

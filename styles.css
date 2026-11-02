@@ -112,3 +112,30 @@ html{touch-action:pan-y pinch-zoom}.compat-motion .glass-panel{backdrop-filter:n
   .compact-mobile-stage .panel-actions,.compact-mobile-stage .panel-closing .panel-actions{left:15px;right:15px;bottom:12px}
   .compact-mobile-stage .member-line{bottom:63px}
 }
+
+/* Keep actions in normal flow: a fixed card must never pin buttons over tags. */
+@media(max-width:760px) and (orientation:portrait){
+  .js .glass-panel,.js .panel-closing{display:flex;flex-direction:column;padding-bottom:18px}
+  .glass-panel>*{flex-shrink:0}
+  .panel-actions,.panel-closing .panel-actions{position:static;flex-shrink:0;margin-top:auto;padding-top:14px}
+  .member-line{position:static;flex-shrink:0;margin:10px 0 0}
+}
+@media(min-width:381px) and (max-width:760px) and (orientation:portrait){
+  .js.short-mobile-stage:not(.compact-mobile-stage) .glass-panel,.js.short-mobile-stage:not(.compact-mobile-stage) .panel-closing{padding:16px 20px}
+  .short-mobile-stage:not(.compact-mobile-stage) .panel-topline,.short-mobile-stage:not(.compact-mobile-stage) .panel-closing .panel-topline{height:30px;margin-bottom:10px}
+  .short-mobile-stage:not(.compact-mobile-stage) .panel-emblem{width:30px;height:30px}
+  .short-mobile-stage:not(.compact-mobile-stage) h1{font-size:46px}.short-mobile-stage:not(.compact-mobile-stage) h2{font-size:36px}
+  .short-mobile-stage:not(.compact-mobile-stage) .description{font-size:13px;line-height:1.45;margin-top:10px}
+  .short-mobile-stage:not(.compact-mobile-stage) .topic-tags{margin-top:10px}
+  .short-mobile-stage:not(.compact-mobile-stage) .topic-tags li{font-size:8.5px;padding:5px 7px}
+  .short-mobile-stage:not(.compact-mobile-stage) .panel-actions,.short-mobile-stage:not(.compact-mobile-stage) .panel-closing .panel-actions{padding-top:12px}
+  .short-mobile-stage:not(.compact-mobile-stage) .cta{min-height:44px}
+}
+@media(max-width:380px) and (orientation:portrait){
+  .js .glass-panel,.js .panel-closing{padding-bottom:14px}
+  .panel-actions,.panel-closing .panel-actions{padding-top:12px}
+}
+@media(max-width:760px) and (orientation:portrait){
+  .js.compact-mobile-stage .glass-panel,.js.compact-mobile-stage .panel-closing{padding-bottom:12px}
+  .compact-mobile-stage .panel-actions,.compact-mobile-stage .panel-closing .panel-actions{padding-top:10px}
+}
