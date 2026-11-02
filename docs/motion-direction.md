@@ -27,6 +27,6 @@ Keep native Chrome preview, touch-friendly responsive layouts, shared vector ico
 - `assets/majlis-room-start-v1.png`: preserved initial image.
 - `assets/majlis-room-start-v2.png`: current mostly-men/dumbbell revision, generated with the built-in image tool, 1672 × 941.
 - `docs/majlis-video-prompts.md`: generation prompts, the first image-to-video prompt, and connected extension prompts.
-- Next dependency: acceptable connected video clips, before replacing the exploratory renderer and validating/publishing the finished room-based site. Paid OpenRouter tests are in progress; do not assume their output passes the art constraints.
+- Video asset run complete: six selected drafts and a 36.25-second compilation, with the original six-second study clip restored at the owner's request. Total paid cost $1.9146168; the run is closed. The owner said the overall results were good. Some crossing geometry shifts and a long foreground-column occlusion remain documented. Next website work: integrate the footage, then validate and publish the room-based site separately.
 
 Prototype 1 remains at its existing GitHub Pages URL and its `prototype-1` tag. Prototype 2 is not yet a finished room-based website.

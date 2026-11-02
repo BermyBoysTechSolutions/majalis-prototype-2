@@ -1,5 +1,29 @@
 # Budgeted OpenRouter room video generation
 
+## Completed asset run and owner revision
+
+Six selected clips and a combined **36.25-second / 870-frame** draft tour were exported. The owner reviewed the clips, said the overall results were good, and requested restoring the earlier six-second Overview → Study shot in place of the four-second Fast replacement. The actual saved six-second clip was restored and the compilation rebuilt; no retiming or additional paid generation was used for that revision.
+
+Final selection: the original six-second study v2 clip from Seedance 1.5 Pro (1280 × 720) and five six-second clips from Seedance 2.0 Fast (864 × 496). All are 24fps and silent. The combined export normalizes to 864 × 496. Each requested six-second clip includes 145 decoded frames, or 6.041667 seconds. Original downloads, superseded versions, chronological frame review sheets, and the earlier compilation are preserved locally outside this public repository.
+
+| Cost group | Actual USD |
+| --- | ---: |
+| Restored selected study clip | 0.1566 |
+| Selected Fast clips 2–6 | 1.274322 |
+| Three superseded generation tests | 0.4836948 |
+| Rejected in-flight-budget request | 0 |
+| **Total** | **1.9146168** |
+
+The total remains below the $1.95 local cap and the owner's $2.12 budget. The run ledger is closed to further paid submissions. The live remaining credit was checked privately and reconciled exactly with the job charges. No top-up, subscription, or Gombey configuration change was made.
+
+Quality review decoded every frame of the six selected source clips (870 frames) and inspected chronological sheets and larger keyframes. The figures are deliberately faceless and clothing remains full-length. Some room geometry shifts in the crossings, and a large foreground column occludes the middle of the fitness transition. These are prototype assets with known limitations, not a finished room-based website. Native Chrome is used for playback review; no in-app browser was used.
+
+Local deliverables live in `../output/majalis-p2/scene-preview/` relative to this repository: six numbered MP4s, `majalis-room-tour-draft-v1.mp4`, chapter metadata, prompts, and a private review gallery. Raw API responses remain separately in the owner-only run directory and are never served or committed. The preceding four-second selection and its 34.25-second compilation are retained in the review folder's archive.
+
+One final-move submission received HTTP 402 `openrouter_in_flight_budget` before a job was accepted. After existing jobs finished, the balance exactly matched known charges, its unused reservation was explicitly reconciled, and a new explicit submission succeeded. There were no automatic paid retries. The runner now records that documented rejection separately. Six offline tests cover the cap, credit floor, uncertain submissions, documented rejection, closed runs, and credential stripping on external redirects.
+
+## Initial preflight and experiments
+
 Owner authorized using the existing Gombey OpenRouter credential on 2026-11-01, with approximately $2.12 in existing credit. No top-up, subscription, provider signup, or other paid account is authorized.
 
 ## Selection and cost preflight

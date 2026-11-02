@@ -27,10 +27,21 @@ FLOOR = Decimal("0.16858")
 SECONDS = 6
 
 
+class ApiFailure(RuntimeError):
+    def __init__(self, status, message, limit_source=None, retry_after=None):
+        super().__init__(f"HTTP {status}: {message}")
+        self.status = status
+        self.limit_source = limit_source
+        self.retry_after = retry_after
+
+
 class SafeRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        destination = urllib.parse.urlparse(newurl)
+        if destination.scheme != "https":
+            raise RuntimeError("Refusing insecure download redirect")
         redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if redirected and urllib.parse.urlparse(newurl).hostname != "openrouter.ai":
+        if redirected and (destination.hostname != "openrouter.ai" or destination.port not in (None, 443)):
             redirected.remove_header("Authorization")
         return redirected
 
@@ -91,11 +102,16 @@ def main():
             # Only the documented error message, never the request/body/credential.
             try:
                 data = json.load(e)
-                message = data.get("error", {}).get("message", "API request failed")
+                error = data.get("error", {})
+                message = error.get("message", "API request failed")
+                limit_source = error.get("metadata", {}).get("limit_source")
             except Exception:
                 message = "API request failed"
+                limit_source = None
             message = re.sub(r"sk-or-[A-Za-z0-9_-]+", "[REDACTED]", str(message))
-            raise RuntimeError(f"HTTP {e.code}: {message[:600]}") from None
+            status, retry_after = e.code, e.headers.get("Retry-After")
+            e.close()
+            raise ApiFailure(status, message[:600], limit_source, retry_after) from None
 
     def balance():
         data = api("/credits")["data"]
@@ -112,6 +128,8 @@ def main():
         return
 
     if args.action == "submit":
+        if ledger.get("closed"):
+            raise RuntimeError("This generation run is closed; no further paid requests")
         if args.scene not in range(1, 7) or not args.image or not args.image.is_file():
             raise RuntimeError("Choose scene 1–6 and an existing first frame")
         if any(j["scene"] == args.scene for j in ledger["jobs"]) and not args.replacement:
@@ -155,7 +173,15 @@ def main():
                    "last_image": str(args.last_image) if args.last_image else None}
         ledger["jobs"].append(attempt)
         private_json(ledger_path, ledger)  # Reserve before making any chargeable request.
-        data = api("/videos", payload)
+        try:
+            data = api("/videos", payload)
+        except ApiFailure as error:
+            if error.status == 402 and error.limit_source == "openrouter_in_flight_budget":
+                attempt.update({"status": "rejected_http_402_in_flight", "charged_or_reserved_usd": "0",
+                                "limit_source": error.limit_source, "retry_after": error.retry_after})
+                private_json(ledger_path, ledger)
+            # Never retry here, even a documented pre-generation rejection.
+            raise
         if not data.get("id"):
             raise RuntimeError("No job ID returned; reservation retained; do not retry blindly")
         attempt.update({"id": data["id"], "status": data.get("status", "pending")})
