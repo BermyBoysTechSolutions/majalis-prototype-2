@@ -2,7 +2,7 @@
 
 ## Revised goal
 
-Preserve Prototype 1. Build an original MAJALIS experience around one coherent stylized 3D CGI Arabian majlis. Scrolling will move the camera through the five activity areas of the same room, using a user-generated Veo video. The earlier particle-based direction was rejected as too similar to the reference and is superseded; its research is retained in `reference-study-archive.md`.
+Preserve Prototype 1. Build an original MAJALIS experience around one coherent stylized 3D CGI Arabian majlis. Scrolling will move the camera through the five activity areas of the same room, using the owner-approved generated camera clips. The earlier particle-based direction was rejected as too similar to the reference and is superseded; its research is retained in `reference-study-archive.md`.
 
 ## Fixed art requirements
 
@@ -22,11 +22,11 @@ A continuous tour starts with the whole room, then approaches study, technology,
 
 Keep native Chrome preview, touch-friendly responsive layouts, shared vector icons, reduced-motion behavior, and honest Sign up / Log in account-preview CTAs. No actual account backend exists yet.
 
-## Current assets and next dependency
+## Current implementation and assets
 
 - `assets/majlis-room-start-v1.png`: preserved initial image.
 - `assets/majlis-room-start-v2.png`: current mostly-men/dumbbell revision, generated with the built-in image tool, 1672 × 941.
 - `docs/majlis-video-prompts.md`: generation prompts, the first image-to-video prompt, and connected extension prompts.
-- Video asset run complete: six selected drafts and a 36.25-second compilation, with the original six-second study clip restored at the owner's request. Total paid cost $1.9146168; the run is closed. The owner said the overall results were good. Some crossing geometry shifts and a long foreground-column occlusion remain documented. Next website work: integrate the footage, then validate and publish the room-based site separately.
+- Video asset run complete: six selected drafts and a 36.25-second compilation, with the original six-second study clip restored at the owner's request. Total paid cost $1.9146168; the run is closed. The owner said the overall results were good. Some crossing geometry shifts and a long foreground-column occlusion remain documented. The website now uses these saved native clips for scroll-controlled movement, with liquid-glass panels and distinct CTAs. Camera travel occupies the first half of each chapter, followed by a reading hold. Portrait mobile retains the whole room above the same content and icons. Reduced motion uses the corresponding stills. Performance and browser checks are recorded in `performance.md`.
 
-Prototype 1 remains at its existing GitHub Pages URL and its `prototype-1` tag. Prototype 2 is not yet a finished room-based website.
+Prototype 1 remains at its existing GitHub Pages URL and its `prototype-1` tag. Prototype 2 has its own repository and separate Pages preview. Account CTAs are previews, not a connected authentication service.

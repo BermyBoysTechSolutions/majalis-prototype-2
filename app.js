@@ -1,168 +1,222 @@
-import { buildShapeClouds, ParticleWorld } from './particles.js';
-const story=document.querySelector('.world-story'),stage=document.querySelector('.world-stage'),canvas=document.querySelector('#particle-world');
-const scenes=[...document.querySelectorAll('.scene')],sources=[...document.querySelectorAll('.art-sources>svg')];
-const practice=document.querySelector('.practice-story'),cards=[...document.querySelectorAll('.learning-card-motion')];
-const portrait=matchMedia('(max-width:760px) and (orientation:portrait)'),reduced=matchMedia('(prefers-reduced-motion:reduce)');
-const root=document.documentElement,animations=[];
-const clamp=(value,min=0,max=1)=>Math.min(max,Math.max(min,value));
-const smooth=value=>value*value*(3-2*value);
-const back=value=>1+2.1*(value-1)**3+1.1*(value-1)**2;
-function chapterPosition(progress,total=7){const raw=clamp(progress)*(total-1),index=Math.min(Math.floor(raw),total-2);return index+smooth(clamp((raw-index-.24)/.52));}
-let dimensions={top:0,distance:1,practiceTop:0,practiceDistance:1,width:1,height:1};
-let world=null,clouds=null,worldVisible=true,raf=0,previousTime=0,startTime=performance.now(),position=0,nativeMotion=false;
-let currentChapter=-1,currentPractice=-1,scrollFrame=0,resizeFrame=0;
-const fallback=document.querySelector('.art-fallback');
-for(let i=0;i<scenes.length;i++){const svg=sources[i].cloneNode(true);svg.removeAttribute('id');scenes[i].querySelector('.scene-still').append(svg);}
-function sceneState(progress,index){
- const d=chapterPosition(progress)-index;
- const enter=smooth(clamp((d+.70)/.55)),exit=smooth(clamp((d-.15)/.55));
- return{opacity:1-smooth(clamp((Math.abs(d)-.18)/.24)),enter,exit,d};
-}
-function lineState(progress,index,line){const {d}=sceneState(progress,index);const enter=smooth(clamp((d+.70-line*.035)/.55)),exit=smooth(clamp((d-.15-line*.025)/.55));return{transform:`translate3d(0,${(1-enter)*112-exit*112}%,0) rotateX(${(1-enter)*-28+exit*28}deg)`};}
-function cardState(progress,index){
- if(portrait.matches){const d=index-chapterPosition(progress,3);return{transform:`translate3d(${d*113}%,${Math.abs(d)*9}px,${-Math.abs(d)*140}px) rotateY(${-d*25}deg) rotateZ(${d*7}deg) scale(${1-Math.min(Math.abs(d)*.065,.2)})`,opacity:1-smooth(clamp((Math.abs(d)-.32)/.68))};}
- const raw=clamp((progress-.08-index*.055)/.40),enter=back(raw),side=index-1;
- return{transform:`translate3d(${(1-enter)*side*52}vw,${(1-enter)*(65+index*7)}vh,${-(1-enter)*index*120}px) rotateY(${(1-enter)*side*34}deg) rotateZ(${(1-enter)*side*15}deg) scale(${.74+enter*.26})`,opacity:smooth(raw)};
-}
-const worldProgress=()=>clamp((scrollY-dimensions.top)/dimensions.distance);
-const practiceProgress=()=>clamp((scrollY-dimensions.practiceTop)/dimensions.practiceDistance);
-function installNativeAnimation(element,timeline,sample){const frames=Array.from({length:241},(_,i)=>({...sample(i/240),offset:i/240}));animations.push(element.animate(frames,{timeline,rangeStart:'contain 0%',rangeEnd:'contain 100%',fill:'both',easing:'linear'}));}
-function setupAnimations(){
- animations.splice(0).forEach(animation=>animation.cancel());nativeMotion=false;
- for(const scene of scenes){scene.style.removeProperty('opacity');for(const node of scene.querySelectorAll('.line-inner,.scene-details'))node.style.removeProperty('transform');}
- for(const card of cards){card.style.removeProperty('transform');card.style.removeProperty('opacity');}
- if(reduced.matches){root.dataset.motionEngine='reduced';return;}
- if(typeof ViewTimeline==='function'){
-  try{
-   const timeline=new ViewTimeline({subject:story,axis:'block'}),cardTimeline=new ViewTimeline({subject:practice,axis:'block'});
-   scenes.forEach((scene,index)=>{
-    installNativeAnimation(scene,timeline,p=>({opacity:sceneState(p,index).opacity}));
-    scene.querySelectorAll('.line-inner').forEach((line,lineIndex)=>installNativeAnimation(line,timeline,p=>lineState(p,index,lineIndex)));
-    installNativeAnimation(scene.querySelector('.scene-details'),timeline,p=>{const{enter,exit}=sceneState(p,index);return{transform:`translate3d(0,${(1-enter)*25-exit*22}px,0)`};});
-   });
-   cards.forEach((card,index)=>installNativeAnimation(card,cardTimeline,p=>cardState(p,index)));
-   installNativeAnimation(document.querySelector('.atmosphere'),timeline,p=>({transform:`translate3d(${Math.sin(p*Math.PI*2)*4}%,${Math.cos(p*Math.PI*2)*3}%,0) rotate(${p*12}deg)`}));
-   if(typeof ScrollTimeline==='function')animations.push(document.querySelector('.reading-progress').animate({transform:['scaleX(0)','scaleX(1)']},{timeline:new ScrollTimeline({source:document.documentElement}),fill:'both'}));
-   nativeMotion=true;root.dataset.motionEngine='native-scroll';return;
-  }catch(error){animations.splice(0).forEach(animation=>animation.cancel());console.warn('Using the scroll animation fallback.',error);}
- }
- root.dataset.motionEngine='fallback';renderFallback();
-}
-function renderFallback(){
- if(reduced.matches||nativeMotion)return;
- const p=worldProgress(),cp=practiceProgress();
- scenes.forEach((scene,index)=>{const state=sceneState(p,index);scene.style.opacity=state.opacity;scene.querySelectorAll('.line-inner').forEach((line,i)=>line.style.transform=lineState(p,index,i).transform);scene.querySelector('.scene-details').style.transform=`translate3d(0,${(1-state.enter)*25-state.exit*22}px,0)`;});
- cards.forEach((card,index)=>Object.assign(card.style,cardState(cp,index)));
- document.querySelector('.reading-progress').style.transform=`scaleX(${scrollY/Math.max(1,document.documentElement.scrollHeight-innerHeight)})`;
-}
-function updateMetadata(){
- root.classList.toggle('on-paper',scrollY>=dimensions.practiceTop-70&&scrollY<dimensions.practiceTop+dimensions.practiceDistance+innerHeight-70);
- const index=Math.round(chapterPosition(worldProgress()));
- if(index!==currentChapter){
-  currentChapter=index;root.dataset.chapter=String(index);
-  scenes.forEach((scene,i)=>{const hidden=!reduced.matches&&i!==index;scene.inert=hidden;scene.setAttribute('aria-hidden',String(hidden));scene.classList.toggle('is-current',i===index);});
-  document.querySelectorAll('[data-chapter-link]').forEach((button,i)=>i===index?button.setAttribute('aria-current','step'):button.removeAttribute('aria-current'));
-  document.querySelector('#chapter-count').textContent=`${String(index+1).padStart(2,'0')} / 07`;
-  if(!world||root.classList.contains('webgl-fallback')){const svg=sources[index].cloneNode(true);svg.removeAttribute('id');fallback.replaceChildren(svg);}
- }
- const cardIndex=Math.round(chapterPosition(practiceProgress(),3));
- if(cardIndex!==currentPractice){currentPractice=cardIndex;cards.forEach((card,i)=>{card.inert=!reduced.matches&&portrait.matches&&i!==cardIndex;card.style.zIndex=String(i===cardIndex?3:1);});document.querySelectorAll('[data-practice-link]').forEach((button,i)=>i===cardIndex?button.setAttribute('aria-current','step'):button.removeAttribute('aria-current'));}
-}
-function measure(){
- const stageRect=stage.getBoundingClientRect();
- dimensions={top:story.getBoundingClientRect().top+scrollY,distance:Math.max(1,story.offsetHeight-innerHeight),practiceTop:practice.getBoundingClientRect().top+scrollY,practiceDistance:Math.max(1,practice.offsetHeight-innerHeight),width:stageRect.width,height:innerHeight};
- if(world)world.resize(dimensions.width,dimensions.height,portrait.matches);
- updateMetadata();renderFallback();
-}
-function useSvgFallback(){root.classList.add('webgl-fallback');root.dataset.renderer='svg';world=null;currentChapter=-1;updateMetadata();syncLoop();}
-function initializeWorld(){
- if(reduced.matches){root.dataset.renderer='reduced';return;}
- if(world)return;
- try{clouds ||= buildShapeClouds(sources);world=new ParticleWorld(canvas,clouds);canvas.dataset.particles='5600';root.dataset.renderer='webgl';root.classList.remove('webgl-fallback');world.resize(dimensions.width,dimensions.height,portrait.matches);}
- catch(error){console.warn('Using the vector artwork fallback.',error);useSvgFallback();}
-}
-function frame(now){
- raf=0;if(!world||!worldVisible||document.hidden||reduced.matches||document.querySelector('#account-dialog').open)return;
- const delta=previousTime?Math.min((now-previousTime)/1000,.1):1/60;previousTime=now;
- const target=chapterPosition(worldProgress());position+=(target-position)*(1-Math.exp(-delta*18));if(Math.abs(position-target)<.00001)position=target;
- world.render((now-startTime)/1000,position,Math.min(1,(now-startTime)/1050));
- raf=requestAnimationFrame(frame);
-}
-function syncLoop(){const running=world&&worldVisible&&!document.hidden&&!reduced.matches&&!document.querySelector('#account-dialog').open;if(running){if(!raf)raf=requestAnimationFrame(frame);}else{cancelAnimationFrame(raf);raf=0;previousTime=0;}}
-function gotoChapter(index){if(reduced.matches){scenes[index].scrollIntoView({behavior:'auto'});return;}scrollTo({top:dimensions.top+dimensions.distance*index/(scenes.length-1),behavior:'smooth'});}
-function onPreferenceChange(){cancelAnimationFrame(raf);raf=0;currentChapter=-1;currentPractice=-1;setupAnimations();measure();initializeWorld();if(reduced.matches){scenes.forEach(scene=>{scene.inert=false;scene.setAttribute('aria-hidden','false');});cards.forEach(card=>card.inert=false);}else root.dataset.renderer=world?'webgl':'svg';position=chapterPosition(worldProgress());syncLoop();}
-measure();setupAnimations();initializeWorld();updateMetadata();syncLoop();
-new IntersectionObserver(([entry])=>{worldVisible=entry.isIntersecting;syncLoop();}).observe(stage);
-new MutationObserver(syncLoop).observe(document.querySelector('#account-dialog'),{attributes:true,attributeFilter:['open']});
-canvas.addEventListener('webglcontextlost',event=>{event.preventDefault();useSvgFallback();});
-addEventListener('scroll',()=>{if(scrollFrame)return;scrollFrame=requestAnimationFrame(()=>{scrollFrame=0;updateMetadata();renderFallback();});},{passive:true});
-addEventListener('resize',()=>{if(resizeFrame)return;resizeFrame=requestAnimationFrame(()=>{resizeFrame=0;measure();});},{passive:true});
-portrait.addEventListener('change',onPreferenceChange);reduced.addEventListener('change',onPreferenceChange);
-document.addEventListener('visibilitychange',()=>{root.classList.toggle('page-hidden',document.hidden);syncLoop();});
-document.fonts.ready.then(measure);
-document.querySelectorAll('[data-chapter-link]').forEach(button=>button.addEventListener('click',()=>gotoChapter(Number(button.dataset.chapterLink))));
-document.querySelectorAll('a[href="#discover"]').forEach(link=>link.addEventListener('click',event=>{event.preventDefault();gotoChapter(1);}));
-document.querySelectorAll('[data-practice-link]').forEach(button=>button.addEventListener('click',()=>scrollTo({top:dimensions.practiceTop+dimensions.practiceDistance*Number(button.dataset.practiceLink)/2,behavior:reduced.matches?'auto':'smooth'})));
-const ambientObserver=new IntersectionObserver(entries=>entries.forEach(({target,isIntersecting})=>target.classList.toggle('motion-paused',!isIntersecting)),{rootMargin:'100px'});ambientObserver.observe(document.querySelector('.closing'));
+import { VideoPlayer } from './video-player.js';
 
-(() => {
-  const dialog = document.querySelector('#account-dialog');
-  if (!dialog) return;
-  const heading = dialog.querySelector('#account-heading');
-  const description = dialog.querySelector('#account-description');
-  const modeLabel = dialog.querySelector('#account-mode-label');
-  const switchLabel = dialog.querySelector('#account-switch-label');
-  const switchButton = dialog.querySelector('.account-switch');
-  const copy = {
-    signup: {
-      label: 'Sign up',
-      heading: 'Your next chapter starts here.',
-      description: 'Sign-up is coming soon. This prototype previews the MAJALIS experience; member accounts are not available yet.',
-      switchLabel: 'Already a member?',
-      switchMode: 'login',
-      switchText: 'Log in',
-    },
-    login: {
-      label: 'Log in',
-      heading: 'Welcome back to MAJALIS.',
-      description: 'Member login is coming soon. Account access is not enabled in this prototype yet.',
-      switchLabel: 'New to MAJALIS?',
-      switchMode: 'signup',
-      switchText: 'Sign up',
-    },
-  };
+const root = document.documentElement;
+const chapters = [...document.querySelectorAll('.chapter')];
+const panels = [...document.querySelectorAll('[data-panel]')];
+const rail = [...document.querySelectorAll('.chapter-nav a')];
+const checkpoints = [0, 144, 289, 434, 579, 724, 869];
+const labels = ['Welcome to the majlis', 'Islamic knowledge', 'Technology & content', 'Business & finance', 'Health & fitness', 'The community hub', 'A place for you'];
+const interests = ['MAJALIS', 'Islamic knowledge', 'Technology and content creation', 'Business and finance', 'Health and fitness', 'The community hub', 'MAJALIS'];
+const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+const portrait = matchMedia('(max-width: 760px) and (orientation: portrait)');
+const sceneWindow = document.querySelector('.scene-window');
+const poster = document.querySelector('.scene-poster');
+const roomLabel = document.querySelector('#room-label');
+const progressBar = document.querySelector('.reading-progress span');
+const clamp = value => Math.max(0, Math.min(1, value));
+const smooth = value => { const t = clamp(value); return t * t * (3 - 2 * t); };
+let dimensions = [];
+let maxScroll = 1;
+let targetScroll = scrollY;
+let currentScroll = scrollY;
+let previousTime = 0;
+let previousFrame = 0;
+let raf = 0;
+let activeChapter = -1;
+let posterIndex = -1;
+let lastPaint = false;
+let modalOpen = false;
+let resizeFrame = 0;
+const panelStates = new Map();
 
-  document.querySelectorAll('[data-account-mode]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const content = copy[button.dataset.accountMode] || copy.signup;
-      modeLabel.textContent = content.label;
-      heading.textContent = content.heading;
-      description.textContent = content.description;
-      switchLabel.textContent = content.switchLabel;
-      switchButton.dataset.accountMode = content.switchMode;
-      switchButton.textContent = content.switchText;
-      if (!dialog.open) dialog.showModal();
-    });
+function wake() {
+  if (!raf && !document.hidden && !modalOpen) raf = requestAnimationFrame(tick);
+}
+const player = new VideoPlayer(document.querySelector('#room-canvas'), wake);
+
+function measure() {
+  dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top + scrollY, height: section.offsetHeight }));
+  maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  targetScroll = Math.max(0, Math.min(maxScroll, scrollY));
+  currentScroll = targetScroll;
+  player.resize(sceneWindow.getBoundingClientRect());
+  lastPaint = false;
+  panelStates.clear();
+  wake();
+}
+
+function sample(position) {
+  let index = 0;
+  while (index < dimensions.length - 1 && position >= dimensions[index + 1].top) index++;
+  const distance = index === 6 ? Math.max(1, maxScroll - dimensions[index].top) : dimensions[index].height;
+  const local = clamp((position - dimensions[index].top) / distance);
+  if (index === 0 || reduced.matches) return { index, local, frame: checkpoints[index], incoming: 1, outgoing: 0 };
+  const travel = smooth(local / .49);
+  return { index, local, frame: checkpoints[index - 1] + (checkpoints[index] - checkpoints[index - 1]) * travel,
+    incoming: smooth((local - .39) / .17), outgoing: 1 - smooth(local / .18) };
+}
+
+function showPanel(index, opacity) {
+  const panel = panels[index];
+  const visible = opacity > .003;
+  const interactive = opacity > .65;
+  const state = `${opacity.toFixed(3)}:${portrait.matches}`;
+  if (panelStates.get(index) === state) return;
+  panelStates.set(index, state);
+  panel.classList.toggle('is-live', visible);
+  panel.classList.toggle('is-interactive', interactive);
+  if (!interactive && panel.contains(document.activeElement) && !modalOpen) rail[Math.max(0, activeChapter)].focus({ preventScroll: true });
+  panel.inert = !interactive;
+  panel.setAttribute('aria-hidden', String(!interactive));
+  panel.style.opacity = opacity.toFixed(3);
+  const offset = (1 - opacity) * 18;
+  const scale = 1 - (1 - opacity) * .018;
+  if (portrait.matches) panel.style.transform = `translate3d(0,${offset}px,0) scale(${scale})`;
+  else panel.style.transform = `translate3d(${index === 6 ? '-50%' : '0'},calc(-50% + ${offset}px),0) scale(${scale})`;
+}
+
+function setPoster(index) {
+  if (index === posterIndex) return;
+  posterIndex = index;
+  poster.src = new URL(`./assets/tour/stills/scene-${index}.webp`, import.meta.url).href;
+}
+
+function render(position) {
+  const state = sample(position);
+  const current = state.index === 0 || reduced.matches ? state.index : state.local > .37 ? state.index : state.index - 1;
+  if (current !== activeChapter) {
+    activeChapter = current;
+    root.dataset.chapter = String(current);
+    roomLabel.textContent = labels[current];
+    rail.forEach((link, index) => index === current ? link.setAttribute('aria-current', 'step') : link.removeAttribute('aria-current'));
+  }
+  panels.forEach((_, index) => showPanel(index,
+    index === state.index ? state.incoming : index === state.index - 1 ? state.outgoing : 0));
+  progressBar.style.transform = `scaleX(${clamp(position / maxScroll)})`;
+  setPoster(current);
+  if (reduced.matches) {
+    root.classList.remove('frames-ready');
+    previousFrame = state.frame;
+    return;
+  }
+  const direction = state.frame >= previousFrame ? 1 : -1;
+  player.warm(checkpoints[current], checkpoints[Math.min(current + 1, 6)]);
+  player.request(state.frame, direction);
+  const painted = player.draw(state.frame);
+  root.classList.toggle('frames-ready', painted);
+  lastPaint = painted;
+  previousFrame = state.frame;
+}
+
+function tick(time) {
+  raf = 0;
+  if (document.hidden || modalOpen) { previousTime = 0; return; }
+  const delta = previousTime ? Math.min(64, time - previousTime) : 16.67;
+  previousTime = time;
+  if (reduced.matches) currentScroll = targetScroll;
+  else currentScroll += (targetScroll - currentScroll) * (1 - Math.exp(-delta / 62));
+  if (Math.abs(targetScroll - currentScroll) < .08) currentScroll = targetScroll;
+  render(currentScroll);
+  if (Math.abs(targetScroll - currentScroll) > .08) wake();
+  else previousTime = 0;
+}
+
+function jump(index, instant = false) {
+  const entry = dimensions[index];
+  if (!entry) return;
+  const available = index === 6 ? maxScroll - entry.top : entry.height;
+  const top = index === 0 ? 0 : entry.top + available * .66;
+  scrollTo({ top: Math.min(maxScroll, top), behavior: instant || reduced.matches ? 'instant' : 'smooth' });
+  history.replaceState(null, '', `#${chapters[index].id}`);
+}
+
+document.querySelectorAll('a[href^="#"]').forEach(link => {
+  const index = chapters.findIndex(section => `#${section.id}` === link.getAttribute('href'));
+  if (index >= 0) link.addEventListener('click', event => {
+    event.preventDefault();
+    if (link.classList.contains('skip-link')) {
+      jump(index, true);
+      targetScroll = currentScroll = scrollY;
+      render(currentScroll);
+      const heading = chapters[index].querySelector('h1,h2');
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    } else jump(index);
   });
-  dialog.querySelector('[data-account-close]').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('keydown', (event) => {
-    if (event.key !== 'Tab') return;
-    const controls = [...dialog.querySelectorAll('button:not([disabled]), a[href]')];
-    const first = controls[0];
-    const last = controls[controls.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  });
-  // Close before the existing discovery anchor handler scrolls the page.
-  dialog.querySelector('[data-account-browse]').addEventListener('click', () => dialog.close(), { capture: true });
-  dialog.addEventListener('click', (event) => {
+});
+addEventListener('scroll', () => { targetScroll = Math.max(0, Math.min(maxScroll, scrollY)); wake(); }, { passive: true });
+addEventListener('resize', () => {
+  if (resizeFrame) return;
+  resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; measure(); });
+}, { passive: true });
+reduced.addEventListener('change', () => {
+  root.classList.toggle('reduced-motion', reduced.matches);
+  if (reduced.matches) player.clear();
+  measure();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { cancelAnimationFrame(raf); raf = 0; previousTime = 0; }
+  else { targetScroll = scrollY; player.pumpWarm(); wake(); }
+});
+addEventListener('pagehide', () => player.clear());
+addEventListener('pageshow', () => measure());
+
+// Native dialogs handle focus containment and Escape. There are no account forms.
+let dialogTrigger = null;
+let interest = 'MAJALIS';
+function openDialog(dialog, trigger) {
+  dialogTrigger = trigger;
+  modalOpen = true;
+  cancelAnimationFrame(raf); raf = 0; previousTime = 0;
+  document.body.classList.add('dialog-open');
+  dialog.showModal();
+}
+const account = document.querySelector('#account-dialog');
+function setAccountMode(mode) {
+  const login = mode === 'login';
+  document.querySelector('#account-title').innerHTML = login ? 'Welcome<br /><em>back.</em>' : 'Make yourself<br /><em>at home.</em>';
+  document.querySelector('#account-description').textContent = login ? 'Member sign-in opens with the community launch. For now, take a look around and find your space.' : 'This is an early look at MAJALIS. Accounts will open with the community launch.';
+  document.querySelector('#account-interest').textContent = `Your interest: ${interest}`;
+  account.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+}
+document.querySelectorAll('[data-account]').forEach(button => button.addEventListener('click', () => {
+  interest = button.dataset.interest || interests[Math.max(0, activeChapter)];
+  setAccountMode(button.dataset.account);
+  openDialog(account, button);
+}));
+account.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => setAccountMode(button.dataset.mode)));
+document.querySelectorAll('[data-guidelines]').forEach(button => button.addEventListener('click', () => openDialog(document.querySelector('#guidelines-dialog'), button)));
+const film = document.querySelector('#film-dialog');
+const video = film.querySelector('video');
+document.querySelectorAll('[data-film]').forEach(button => button.addEventListener('click', () => {
+  video.src = video.dataset.src;
+  openDialog(film, button);
+  video.play().catch(() => {});
+}));
+document.querySelectorAll('dialog').forEach(dialog => {
+  dialog.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => dialog.close()));
+  dialog.addEventListener('click', event => {
     if (event.target !== dialog) return;
-    const bounds = dialog.getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+    const box = dialog.getBoundingClientRect();
+    if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) dialog.close();
   });
-})();
+  dialog.addEventListener('close', () => {
+    if (dialog === film) { video.pause(); video.removeAttribute('src'); video.load(); }
+    modalOpen = false;
+    document.body.classList.remove('dialog-open');
+    dialogTrigger?.focus({ preventScroll: true });
+    targetScroll = scrollY;
+    wake();
+  });
+});
+
+root.classList.add('is-mounted');
+root.classList.toggle('reduced-motion', reduced.matches);
+measure();
+const initial = chapters.findIndex(section => `#${section.id}` === location.hash);
+if (initial > 0) requestAnimationFrame(() => jump(initial, true));
+window.__majalis = {
+  snapshot: () => ({ chapter: activeChapter, targetScroll, currentScroll, frame: previousFrame, reduced: reduced.matches,
+    running: Boolean(raf), maxScroll, sections: dimensions.map((d, i) => ({ ...d, id: chapters[i].id })), ...player.snapshot() }),
+  jump: index => jump(index, true),
+};
