@@ -40,3 +40,12 @@ python3 scripts/serve.py --port 4175
 ```
 
 The server and GitHub Pages support HTTP byte ranges. Tailscale `/majalis-2` proxies 4175; existing root, Prototype 1 and video-review routes are preserved. Public sharing remains https://bermyboystechsolutions.github.io/majalis-prototype-2/ . No duplicate third repository is needed: Prototype 2 already has its separate repo and Pages site.
+
+
+## Stationary mobile stage — 2026-11-02
+
+Portrait mobile now uses a larger room viewport, with focal framing that makes the study, computer desk, business table, fitness and community activities prominent. Framing moves on a shared composited room layer, so the video and native-resolution stills stay aligned without re-encoding footage.
+
+The description area has one persistent, fixed-size glass shell. All chapter cards occupy exactly that rectangle; their contents fade without translating or scaling. Section labels, icons and description text are larger, and CTA rows have a consistent bottom anchor. The room, description frame and navigation use a stable mobile stage height rather than following browser-toolbar expansion/collapse. Rotation and substantial resizes still reflow. Chapter scroll distances use that same stable height. No wheel/touch cancellation was added.
+
+Native Chrome checks passed all seven sections at390×844,430×932,320×667 and320×568 (28 layouts): matching card/shell rectangles, no internal card scrolling, no clipped/overlapping CTAs, no horizontal overflow, no card translation or scaling. During a real touch gesture starting over the description area, 256 frame samples kept the room, shell and navigation rectangles identical while actual video frames advanced. An80px same-width viewport-height change kept the stage geometry and typography unchanged. Desktop camera playback and its original card layout passed a representative check. No runtime/media errors. Reports/captures: local `output/majalis-p2/pinned-*`. Physical-phone browser-toolbar behavior remains subject to user verification; the height-change check uses DevTools emulation.

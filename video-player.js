@@ -13,6 +13,8 @@ export class VideoPlayer {
     this.active = this.visible = null;
     this.warmKey = '';
     this.rect = { width: 864, height: 496 };
+    this.focal = [.5, .5, 1];
+    this.focalStyle = '';
     this.quality = 'standard';
     this.suspended = false;
     this.blocked = false;
@@ -245,10 +247,26 @@ export class VideoPlayer {
       left: `${(this.rect.width - width) / 2}px`, top: `${(this.rect.height - height) / 2}px` });
   }
 
+  focus(x, y, zoom) {
+    this.focal = [x, y, zoom];
+    const { width, height } = this.rect;
+    const scale = Math.max(width / 864, height / 496);
+    const worldWidth = 864 * scale * zoom, worldHeight = 496 * scale * zoom;
+    const left = clamp(width / 2 - worldWidth * x, width - worldWidth, 0);
+    const top = clamp(height / 2 - worldHeight * y, height - worldHeight, 0);
+    const tx = left - (width - worldWidth) / 2, ty = top - (height - worldHeight) / 2;
+    const transform = `translate3d(${tx.toFixed(2)}px,${ty.toFixed(2)}px,0) scale(${zoom.toFixed(4)})`;
+    if (transform !== this.focalStyle) {
+      this.focalStyle = transform;
+      this.host.style.transform = transform;
+    }
+  }
+
   resize(rect) {
     this.rect = rect;
     if (navigator.connection?.saveData || navigator.hardwareConcurrency <= 4) this.useCompatibility();
     for (const record of this.pool.values()) this.layout(record);
+    this.focus(...this.focal);
   }
 
   trim(protectedRecord) {

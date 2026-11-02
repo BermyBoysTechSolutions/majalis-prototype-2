@@ -1,4 +1,4 @@
-import { VideoPlayer } from './video-player.js?v=room-3';
+import { VideoPlayer } from './video-player.js?v=room-4';
 
 const root = document.documentElement;
 const chapters = [...document.querySelectorAll('.chapter')];
@@ -29,6 +29,8 @@ let presentationScroll = scrollY;
 let presentationSettling = false;
 let navigation = null;
 let measuredWidth = innerWidth;
+let mobileStageWidth = 0;
+let mobileStageHeight = 0;
 let modalOpen = false;
 let resizeFrame = 0;
 const panelStates = new Map();
@@ -39,6 +41,24 @@ function wake() {
 const player = new VideoPlayer(document.querySelector('#room-canvas'), wake);
 
 function measure() {
+  if (portrait.matches) {
+    // Freeze the phone stage while browser bars expand/collapse. A width change
+    // or a substantial resize still reflows it for rotation/window resizing.
+    if (Math.abs(innerWidth - mobileStageWidth) > 2 || !mobileStageHeight || Math.abs(innerHeight - mobileStageHeight) > 180) {
+      const probe = document.createElement('div');
+      probe.style.cssText = 'position:fixed;height:100svh;visibility:hidden;pointer-events:none';
+      document.body.append(probe);
+      mobileStageHeight = Math.round(probe.getBoundingClientRect().height || innerHeight);
+      mobileStageWidth = innerWidth;
+      probe.remove();
+      root.style.setProperty('--mobile-stage-height', `${mobileStageHeight}px`);
+    }
+    root.classList.toggle('compact-mobile-stage', mobileStageHeight <= 620);
+  } else {
+    mobileStageWidth = mobileStageHeight = 0;
+    root.style.removeProperty('--mobile-stage-height');
+    root.classList.remove('compact-mobile-stage');
+  }
   dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top + scrollY, height: section.offsetHeight }));
   maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
   targetScroll = Math.max(0, Math.min(maxScroll, scrollY));
@@ -78,7 +98,7 @@ function showPanel(index, opacity) {
   panel.style.opacity = opacity.toFixed(3);
   const offset = (1 - opacity) * 18;
   const scale = 1 - (1 - opacity) * .018;
-  if (portrait.matches) panel.style.transform = `translate3d(0,${offset}px,0) scale(${scale})`;
+  if (portrait.matches) panel.style.transform = 'none';
   else panel.style.transform = `translate3d(${index === 6 ? '-50%' : '0'},calc(-50% + ${offset}px),0) scale(${scale})`;
 }
 
@@ -95,6 +115,19 @@ function cameraPosition(frame) {
   const inverse = .5 - Math.sin(Math.asin(1 - 2 * progress) / 3);
   const distance = index === 6 ? maxScroll - dimensions[index].top : dimensions[index].height;
   return dimensions[index].top + distance * inverse * .49;
+}
+
+const roomFocus = [
+  [.50, .50, 1], [.34, .57, 1.16], [.69, .53, 1.16],
+  [.71, .65, 1.18], [.35, .63, 1.18], [.50, .55, 1.12], [.50, .50, 1],
+];
+function frameActivity(frame) {
+  if (!portrait.matches) { player.focus(.5, .5, 1); return; }
+  let index = 1;
+  while (index < 6 && frame > checkpoints[index]) index++;
+  const t = smooth((frame - checkpoints[index - 1]) / (checkpoints[index] - checkpoints[index - 1]));
+  const from = roomFocus[index - 1], to = roomFocus[index];
+  player.focus(...from.map((value, axis) => value + (to[axis] - value) * t));
 }
 
 function render(position, delta = 16.67) {
@@ -116,8 +149,9 @@ function render(position, delta = 16.67) {
     roomLabel.textContent = labels[current];
     rail.forEach((link, index) => index === current ? link.setAttribute('aria-current', 'step') : link.removeAttribute('aria-current'));
   }
-  panels.forEach((_, index) => showPanel(index,
+  panels.forEach((_, index) => showPanel(index, portrait.matches ? Number(index === current) :
     index === state.index ? state.incoming : index === state.index - 1 ? state.outgoing : 0));
+  frameActivity(reduced.matches ? checkpoints[current] : player.frame);
   progressBar.style.transform = `scaleX(${clamp(presentationScroll / maxScroll)})`;
   setPoster(current);
   if (reduced.matches) {
