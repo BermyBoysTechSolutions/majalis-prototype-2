@@ -19,16 +19,17 @@ Open http://127.0.0.1:4175/ in native Chrome. The server supports HTTP byte rang
 
 ## How it works
 
-Native page scrolling controls six saved camera clips. Video decoding replaces the earlier image-atlas experiment, preserving the clips without another compression pass. Only the mobile opening clip has a smaller derivative; the desktop opening retains its original 1280×720 pixels. The remaining clips are natively 864×496. Source footage is 24fps; no claim of native 120fps or added image detail is made.
+Native page scrolling sets a camera destination. The room then plays the saved camera moves forward or backward using native video playback, keeping content panels aligned with the camera actually presented. It pauses at the destination for reading. Chapter buttons use a distance-based eased journey; wheel, touch or keyboard input can interrupt it immediately. Mobile follows the same camera sequence and chapter timing as desktop.
 
-Readable holds follow each camera move. The browser preloads the next clip and retains at most three video elements. Mobile portrait shows the entire room above the same panels and vector icons; touchscreen scrolling uses native browser behavior. Reduced-motion users see matching stills with no background video decoding. The full tour is also available through “Watch the room.”
+Desktop retains the original 1280×720 opening and 864×496 later clips. Matching reverse clips support backward travel without relying on negative playback rates. Small-core devices and browsers reporting limited decoding capability use 640×368 baseline H.264 compatibility assets. Persistent presentation stalls also select compatibility mode. Capable phones keep the original video detail. Compatibility mode restores the native-resolution poster at reading holds. Only the current/next moves and at most three video elements are retained. Reduced motion uses matching stills with no background decoding; unsupported video falls back to those stills while keeping every section accessible.
 
+The camera is allowed to catch up after a quick fling. Its source is 24fps; neither 120fps nor identical performance on every device is promised. VDI graphics policies, video redirection, network and remote-display frame rates remain outside the page’s control. The full film is available through “Watch the room.”
 Sign up / Log in open honest account previews. No credentials are requested or stored, and authentication is not connected. Guidelines and video playback use native accessible dialogs.
 
 ## Assets
 
 Artwork has featureless faces, predominantly male figures, modest clothing, a fully covered man lifting weights, and no Arabic writing. The owner approved the selected tour. Generation was completed within the previously authorized OpenRouter balance: $1.9146168 total. The run is closed; integration and performance work make no paid API calls. Credentials, API responses, local review exports, and performance captures remain outside the public repository.
 
-`assets/tour/clips/` contains the six selected native MP4s and the mobile opening derivative. `assets/tour/majalis-tour.mp4` is the approved combined tour. `scripts/prepare_tour.py` regenerates the seven loading/reduced-motion posters using local ffmpeg and Pillow, without network access. Source image and controlled endpoints are retained in `assets/`.
+`assets/tour/clips/` contains the six selected native MP4s. `reverse/` has matching reverse moves; `compat/` and `compat-reverse/` contain independent-frame lightweight variants. `scripts/prepare_compat.py` regenerates these locally with ffmpeg, without network access. `assets/tour/majalis-tour.mp4` is the approved combined tour. `scripts/prepare_tour.py` regenerates the seven loading/reduced-motion posters using local ffmpeg and Pillow, without network access. Source image and controlled endpoints are retained in `assets/`.
 
 Prototype 1 remains unchanged in its separate repository and `prototype-1` tag. Reference research and the superseded particle direction are preserved in Git history and `docs/reference-study-archive.md`.

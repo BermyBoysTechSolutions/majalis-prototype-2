@@ -1,4 +1,4 @@
-import { VideoPlayer } from './video-player.js';
+import { VideoPlayer } from './video-player.js?v=room-3';
 
 const root = document.documentElement;
 const chapters = [...document.querySelectorAll('.chapter')];
@@ -11,6 +11,7 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const portrait = matchMedia('(max-width: 760px) and (orientation: portrait)');
 const sceneWindow = document.querySelector('.scene-window');
 const poster = document.querySelector('.scene-poster');
+poster.addEventListener('load', () => wake());
 const roomLabel = document.querySelector('#room-label');
 const progressBar = document.querySelector('.reading-progress span');
 const clamp = value => Math.max(0, Math.min(1, value));
@@ -24,7 +25,10 @@ let previousFrame = 0;
 let raf = 0;
 let activeChapter = -1;
 let posterIndex = -1;
-let lastPaint = false;
+let presentationScroll = scrollY;
+let presentationSettling = false;
+let navigation = null;
+let measuredWidth = innerWidth;
 let modalOpen = false;
 let resizeFrame = 0;
 const panelStates = new Map();
@@ -38,9 +42,12 @@ function measure() {
   dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top + scrollY, height: section.offsetHeight }));
   maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
   targetScroll = Math.max(0, Math.min(maxScroll, scrollY));
-  currentScroll = targetScroll;
+  if (Math.abs(measuredWidth - innerWidth) > 2) {
+    navigation = null;
+    currentScroll = presentationScroll = targetScroll;
+  }
+  measuredWidth = innerWidth;
   player.resize(sceneWindow.getBoundingClientRect());
-  lastPaint = false;
   panelStates.clear();
   wake();
 }
@@ -53,7 +60,7 @@ function sample(position) {
   if (index === 0 || reduced.matches) return { index, local, frame: checkpoints[index], incoming: 1, outgoing: 0 };
   const travel = smooth(local / .49);
   return { index, local, frame: checkpoints[index - 1] + (checkpoints[index] - checkpoints[index - 1]) * travel,
-    incoming: smooth((local - .39) / .17), outgoing: 1 - smooth(local / .18) };
+    incoming: smooth((local - .34) / .15), outgoing: 1 - smooth(local / .20) };
 }
 
 function showPanel(index, opacity) {
@@ -81,8 +88,27 @@ function setPoster(index) {
   poster.src = new URL(`./assets/tour/stills/scene-${index}.webp`, import.meta.url).href;
 }
 
-function render(position) {
-  const state = sample(position);
+function cameraPosition(frame) {
+  let index = 1;
+  while (index < 6 && frame > checkpoints[index]) index++;
+  const progress = clamp((frame - checkpoints[index - 1]) / (checkpoints[index] - checkpoints[index - 1]));
+  const inverse = .5 - Math.sin(Math.asin(1 - 2 * progress) / 3);
+  const distance = index === 6 ? maxScroll - dimensions[index].top : dimensions[index].height;
+  return dimensions[index].top + distance * inverse * .49;
+}
+
+function render(position, delta = 16.67) {
+  const desired = sample(position);
+  let visualTarget = position;
+  if (!reduced.matches) {
+    player.request(desired.frame);
+    if (Math.abs(player.frame - desired.frame) > 1.1) visualTarget = cameraPosition(player.frame);
+  }
+  if (reduced.matches) presentationScroll = visualTarget;
+  else presentationScroll += (visualTarget - presentationScroll) * (1 - Math.exp(-delta / 80));
+  if (Math.abs(visualTarget - presentationScroll) < .1) presentationScroll = visualTarget;
+  presentationSettling = Math.abs(visualTarget - presentationScroll) > .1;
+  const state = sample(presentationScroll);
   const current = state.index === 0 || reduced.matches ? state.index : state.local > .37 ? state.index : state.index - 1;
   if (current !== activeChapter) {
     activeChapter = current;
@@ -92,32 +118,49 @@ function render(position) {
   }
   panels.forEach((_, index) => showPanel(index,
     index === state.index ? state.incoming : index === state.index - 1 ? state.outgoing : 0));
-  progressBar.style.transform = `scaleX(${clamp(position / maxScroll)})`;
+  progressBar.style.transform = `scaleX(${clamp(presentationScroll / maxScroll)})`;
   setPoster(current);
   if (reduced.matches) {
+    // The preference value can change before its asynchronous change event.
+    if (player.pool.size) player.clear();
     root.classList.remove('frames-ready');
+    root.classList.remove('crisp-still');
     previousFrame = state.frame;
     return;
   }
-  const direction = state.frame >= previousFrame ? 1 : -1;
-  player.warm(checkpoints[current], checkpoints[Math.min(current + 1, 6)]);
-  player.request(state.frame, direction);
-  const painted = player.draw(state.frame);
+  const painted = player.draw();
   root.classList.toggle('frames-ready', painted);
-  lastPaint = painted;
+  const atRest = player.quality === 'compat' && Math.abs(player.goal - player.frame) < .03 &&
+    Math.abs(player.frame - checkpoints[current]) < .03 && poster.complete && poster.naturalWidth > 0;
+  root.classList.toggle('crisp-still', atRest);
   previousFrame = state.frame;
 }
 
 function tick(time) {
   raf = 0;
   if (document.hidden || modalOpen) { previousTime = 0; return; }
+  if (navigation) {
+    navigation.started ||= time;
+    const t = clamp((time - navigation.started) / navigation.duration);
+    const eased = t * t * t * (t * (t * 6 - 15) + 10);
+    // Chapter shortcuts travel along the camera path and skip intermediate
+    // reading holds, rather than spending seconds scrolling empty chapter space.
+    const travel = Math.min(1, eased / .92);
+    const frame = navigation.fromFrame + (navigation.toFrame - navigation.fromFrame) * travel;
+    const arrival = cameraPosition(navigation.toFrame);
+    const top = t === 0 ? navigation.from : eased < .92 ? cameraPosition(frame) :
+      arrival + (navigation.to - arrival) * ((eased - .92) / .08);
+    scrollTo({ top, behavior: 'instant' });
+    targetScroll = scrollY;
+    if (t === 1) navigation = null;
+  }
   const delta = previousTime ? Math.min(64, time - previousTime) : 16.67;
   previousTime = time;
   if (reduced.matches) currentScroll = targetScroll;
   else currentScroll += (targetScroll - currentScroll) * (1 - Math.exp(-delta / 62));
   if (Math.abs(targetScroll - currentScroll) < .08) currentScroll = targetScroll;
-  render(currentScroll);
-  if (Math.abs(targetScroll - currentScroll) > .08) wake();
+  render(currentScroll, delta);
+  if (navigation || presentationSettling || Math.abs(targetScroll - currentScroll) > .08) wake();
   else previousTime = 0;
 }
 
@@ -126,7 +169,18 @@ function jump(index, instant = false) {
   if (!entry) return;
   const available = index === 6 ? maxScroll - entry.top : entry.height;
   const top = index === 0 ? 0 : entry.top + available * .66;
-  scrollTo({ top: Math.min(maxScroll, top), behavior: instant || reduced.matches ? 'instant' : 'smooth' });
+  const to = Math.min(maxScroll, top);
+  if (instant || reduced.matches) {
+    navigation = null;
+    player.snap(checkpoints[index]);
+    scrollTo({ top: to, behavior: 'instant' });
+    targetScroll = currentScroll = presentationScroll = scrollY;
+  } else {
+    const distance = Math.abs(checkpoints[index] - player.frame);
+    navigation = { from: scrollY, to, fromFrame: player.frame, toFrame: checkpoints[index],
+      started: 0, duration: Math.max(1900, distance / 24 / 3.3 * 1000 + 600) };
+  }
+  wake();
   history.replaceState(null, '', `#${chapters[index].id}`);
 }
 
@@ -144,6 +198,13 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     } else jump(index);
   });
 });
+function cancelNavigation() { navigation = null; }
+addEventListener('wheel', cancelNavigation, { passive: true });
+addEventListener('touchstart', () => { cancelNavigation(); player.unlock(); }, { passive: true });
+addEventListener('pointerdown', () => { cancelNavigation(); player.unlock(); }, { passive: true });
+addEventListener('keydown', event => {
+  if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) cancelNavigation();
+});
 addEventListener('scroll', () => { targetScroll = Math.max(0, Math.min(maxScroll, scrollY)); wake(); }, { passive: true });
 addEventListener('resize', () => {
   if (resizeFrame) return;
@@ -151,12 +212,12 @@ addEventListener('resize', () => {
 }, { passive: true });
 reduced.addEventListener('change', () => {
   root.classList.toggle('reduced-motion', reduced.matches);
-  if (reduced.matches) player.clear();
+  if (reduced.matches) { navigation = null; player.clear(); }
   measure();
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { cancelAnimationFrame(raf); raf = 0; previousTime = 0; }
-  else { targetScroll = scrollY; player.pumpWarm(); wake(); }
+  if (document.hidden) { player.pause(); cancelAnimationFrame(raf); raf = 0; previousTime = 0; }
+  else { targetScroll = scrollY; player.resume(); wake(); }
 });
 addEventListener('pagehide', () => player.clear());
 addEventListener('pageshow', () => measure());
@@ -167,6 +228,8 @@ let interest = 'MAJALIS';
 function openDialog(dialog, trigger) {
   dialogTrigger = trigger;
   modalOpen = true;
+  navigation = null;
+  player.pause();
   cancelAnimationFrame(raf); raf = 0; previousTime = 0;
   document.body.classList.add('dialog-open');
   dialog.showModal();
@@ -203,6 +266,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
   dialog.addEventListener('close', () => {
     if (dialog === film) { video.pause(); video.removeAttribute('src'); video.load(); }
     modalOpen = false;
+    player.resume();
     document.body.classList.remove('dialog-open');
     dialogTrigger?.focus({ preventScroll: true });
     targetScroll = scrollY;
@@ -217,6 +281,7 @@ const initial = chapters.findIndex(section => `#${section.id}` === location.hash
 if (initial > 0) requestAnimationFrame(() => jump(initial, true));
 window.__majalis = {
   snapshot: () => ({ chapter: activeChapter, targetScroll, currentScroll, frame: previousFrame, reduced: reduced.matches,
-    running: Boolean(raf), maxScroll, sections: dimensions.map((d, i) => ({ ...d, id: chapters[i].id })), ...player.snapshot() }),
+    running: Boolean(raf), navigating: Boolean(navigation), presentationScroll, maxScroll, sections: dimensions.map((d, i) => ({ ...d, id: chapters[i].id })), ...player.snapshot() }),
   jump: index => jump(index, true),
+  navigate: index => jump(index),
 };

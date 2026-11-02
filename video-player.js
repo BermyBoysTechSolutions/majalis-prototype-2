@@ -1,72 +1,244 @@
-// Preserve the saved clips. Hardware video decoding avoids per-frame image downloads.
+// Native forward/reverse playback follows the scroll target without per-frame seeks.
 const FILES = ['01-study.mp4', '02-technology.mp4', '03-business.mp4', '04-fitness.mp4', '05-community.mp4', '06-overview.mp4'];
-const TOTAL = 870;
+const FPS = 24, LENGTH = 145, LAST = 869;
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 export class VideoPlayer {
   constructor(canvas, wake) {
     this.host = canvas.parentElement;
     this.wake = wake;
     this.pool = new Map();
-    this.target = 0;
-    this.targetIndex = 0;
-    this.visibleIndex = -1;
-    this.warmIndex = 0;
-    this.frame = 0;
+    this.frame = this.goal = 0;
+    this.goalChanged = performance.now();
+    this.direction = 1;
+    this.active = this.visible = null;
+    this.warmKey = '';
     this.rect = { width: 864, height: 496 };
-    this.stats = { requests: 0, decoded: 0, released: 0, errors: 0, draws: 0, paintRequests: 0, fallbacks: 0, seekTimes: [] };
+    this.quality = 'standard';
+    this.suspended = false;
+    this.blocked = false;
+    this.unavailable = false;
+    this.timer = 0;
+    this.slowFrames = 0;
+    this.stats = { seeks: 0, plays: 0, presented: 0, errors: 0, released: 0, qualityChanges: 0, seekTimes: [] };
     document.documentElement.classList.add('video-engine');
+    navigator.mediaCapabilities?.decodingInfo?.({ type: 'file', video: {
+      contentType: 'video/mp4; codecs="avc1.64001f"', width: 1280, height: 720,
+      bitrate: 11000000, framerate: 24,
+    } }).then(info => {
+      if (!info.supported || !info.smooth) this.useCompatibility();
+    }).catch(() => {});
   }
 
-  ensure(index) {
-    if (this.pool.has(index)) return this.pool.get(index);
+  ensure(index, direction) {
+    const key = `${this.quality}:${index}:${direction}`;
+    if (this.pool.has(key)) return this.pool.get(key);
     const video = document.createElement('video');
-    video.className = 'room-video';
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = 'auto';
-    video.disablePictureInPicture = true;
-    video.setAttribute('aria-hidden', 'true');
+    Object.assign(video, { className: 'room-video', muted: true, defaultMuted: true,
+      playsInline: true, preload: 'auto', disablePictureInPicture: true });
     video.setAttribute('muted', '');
     video.setAttribute('playsinline', '');
-    const record = { video, index, hasFrame: false, disposed: false, started: 0, callback: 0, presented: index * 145 };
-    this.pool.set(index, record);
-    video.addEventListener('loadeddata', () => {
-      if (record.disposed) return;
-      record.hasFrame = true;
-      this.wake();
-    });
+    video.setAttribute('aria-hidden', 'true');
+    const record = { key, index, direction, video, disposed: false, hasFrame: false,
+      aligned: false, aligning: false, playPending: false, started: 0, callback: 0, lastTime: 0, lastPresented: 0 };
+    this.pool.set(key, record);
+    this.layout(record);
+    video.addEventListener('loadeddata', () => { record.hasFrame = true; this.wake(); });
     video.addEventListener('seeked', () => {
       if (record.disposed) return;
-      this.stats.decoded++;
+      record.aligning = false;
+      record.aligned = record.hasFrame = true;
       if (record.started) {
         this.stats.seekTimes.push(performance.now() - record.started);
-        if (this.stats.seekTimes.length > 256) this.stats.seekTimes.shift();
+        if (this.stats.seekTimes.length > 32) this.stats.seekTimes.shift();
       }
       record.started = 0;
-      record.hasFrame = true;
-      if (index === this.targetIndex) this.show(record);
+      if (record === this.active) { this.frame = this.worldFrame(record, video.currentTime); this.show(record); }
       this.wake();
     });
-    video.addEventListener('error', () => { if (!record.disposed) { this.stats.errors++; this.wake(); } });
+    video.addEventListener('ended', () => {
+      if (record === this.active) this.frame = index * LENGTH + (direction > 0 ? 144 : 0);
+      this.wake();
+    });
+    video.addEventListener('timeupdate', () => {
+      if (!video.requestVideoFrameCallback) this.present(record, video.currentTime);
+    });
+    video.addEventListener('error', () => {
+      if (record.disposed) return;
+      this.stats.errors++;
+      if (this.quality === 'standard') this.useCompatibility();
+      else { this.unavailable = true; this.clear(); this.wake(); }
+    });
     if (video.requestVideoFrameCallback) {
       const presented = (_, meta) => {
         if (record.disposed) return;
-        record.presented = index * 145 + meta.mediaTime * 24;
-        this.stats.draws++;
-        record.callback = video.requestVideoFrameCallback(presented);
+        const now = performance.now();
+        // Measure actual missed presentations at modest playback speed. Decoder
+        // processingDuration includes pipeline buffering and is not a CPU benchmark.
+        if (record === this.active && !video.paused && !video.seeking && video.playbackRate <= 1.5 && record.lastPresented) {
+          const stalled = now - record.lastPresented > 140 && Math.abs(meta.mediaTime - record.lastTime) > .14;
+          this.slowFrames = Math.max(0, this.slowFrames + (stalled ? 1 : -.25));
+        }
+        record.lastPresented = now;
+        record.lastTime = meta.mediaTime;
+        this.present(record, meta.mediaTime);
+        if (this.slowFrames >= 5 && this.quality === 'standard') this.useCompatibility();
+        if (!record.disposed) record.callback = video.requestVideoFrameCallback(presented);
       };
       record.callback = video.requestVideoFrameCallback(presented);
     }
     this.host.prepend(video);
-    this.layout(record);
-    const file = index === 0 && this.mobile ? '01-study-mobile.mp4' : FILES[index];
-    video.src = new URL(`./assets/tour/clips/${file}`, import.meta.url).href;
+    const folder = this.quality === 'compat' ? (direction > 0 ? 'compat' : 'compat-reverse') : (direction > 0 ? 'clips' : 'reverse');
+    video.src = new URL(`./assets/tour/${folder}/${FILES[index]}`, import.meta.url).href;
     video.load();
-    this.trim();
+    this.trim(record);
     return record;
   }
 
+  worldFrame(record, time) {
+    return record.index * LENGTH + clamp(record.direction > 0 ? time * FPS : 144 - time * FPS, 0, 144);
+  }
+
+  present(record, time) {
+    if (record !== this.active || !record.aligned || record.aligning || record.disposed) return;
+    this.stats.presented++;
+    this.frame = this.worldFrame(record, time);
+    this.show(record);
+    // Stop as soon as the presented camera passes the scroll target.
+    if ((this.goal - this.frame) * record.direction < .6) record.video.pause();
+    this.wake();
+  }
+
+  align(record, frame) {
+    if (record.aligning || record.video.readyState < 2) return;
+    const local = clamp(frame - record.index * LENGTH, 0, 144);
+    const time = (record.direction > 0 ? local : 144 - local) / FPS + .00001;
+    if (Math.abs(record.video.currentTime - time) < .002) {
+      record.aligned = true;
+      this.frame = this.worldFrame(record, record.video.currentTime);
+      this.show(record);
+      return;
+    }
+    record.video.pause();
+    record.aligned = false;
+    record.aligning = true;
+    record.started = performance.now();
+    this.stats.seeks++;
+    record.video.currentTime = time;
+  }
+
+  request(position) {
+    const goal = Math.round(clamp(position, 0, LAST));
+    if (goal !== this.goal) this.goalChanged = performance.now();
+    this.goal = goal;
+    const stable = performance.now() - this.goalChanged > 100;
+    if (this.unavailable) { this.frame = this.goal; return; }
+    if (this.suspended) return;
+    const delta = this.goal - this.frame;
+    if (stable && this.active?.aligned && this.active.video.paused && Math.abs(delta) < 4.5 &&
+        Math.floor(this.goal / LENGTH) === this.active.index) {
+      if (Math.abs(delta) > .03) this.align(this.active, this.goal);
+      return;
+    }
+    // A tiny dead band avoids alternating directions between adjacent source frames.
+    const direction = Math.abs(delta) > 1.1 ? Math.sign(delta) : this.direction;
+    let index = clamp(Math.floor(this.frame / LENGTH), 0, 5);
+    if (direction > 0 && this.frame >= index * LENGTH + 143.5 && this.goal > index * LENGTH + 144.5 && index < 5) {
+      index++; this.frame = index * LENGTH;
+    } else if (direction < 0 && this.frame <= index * LENGTH + .5 && this.goal < index * LENGTH - .5 && index > 0) {
+      index--; this.frame = index * LENGTH + 144;
+    }
+    const record = this.ensure(index, direction);
+    if (record !== this.active) {
+      this.active?.video.pause();
+      this.active = record;
+      record.aligned = false;
+      this.trim();
+    }
+    this.direction = direction;
+    if (record.video.readyState < 2 || record.aligning) return;
+    if (!record.aligned) { this.align(record, this.frame); return; }
+    const remaining = (this.goal - this.frame) * direction;
+    if (remaining <= 1.1) {
+      record.video.pause();
+      // One final alignment preserves the exact requested endpoint after playback.
+      if (stable && Math.abs(this.goal - this.frame) > .03 && Math.floor(this.goal / LENGTH) === index) this.align(record, this.goal);
+      if (!stable && !this.timer) this.timer = setTimeout(() => { this.timer = 0; this.wake(); }, 120);
+      return;
+    }
+    if (this.blocked) {
+      // Autoplay restrictions still leave a usable scroll tour and explicit film control.
+      this.seekFallback();
+      return;
+    }
+    const rate = clamp(remaining / FPS * 3.5, .8, 4);
+    if (Math.abs(record.video.playbackRate - rate) > .08) record.video.playbackRate = rate;
+    if (record.video.paused && !record.playPending) {
+      record.playPending = true;
+      this.stats.plays++;
+      record.video.play().catch(error => {
+        if (error.name === 'NotAllowedError') { this.blocked = true; this.useCompatibility(); }
+      }).finally(() => { record.playPending = false; this.wake(); });
+    }
+    // Also wake in browsers without frame callbacks, or while a video is buffering.
+    if (!this.timer) this.timer = setTimeout(() => { this.timer = 0; this.wake(); }, 120);
+    this.preloadNext(index, direction);
+  }
+
+  seekFallback() {
+    const index = Math.min(5, Math.floor(this.goal / LENGTH));
+    const record = this.ensure(index, 1);
+    if (this.active !== record) { this.active?.video.pause(); this.active = record; }
+    if (!record.aligning) this.align(record, this.goal);
+  }
+
+  preloadNext(index, direction) {
+    if (navigator.connection?.saveData) return;
+    const next = index + direction;
+    if (next < 0 || next > 5) return;
+    this.warmKey = `${this.quality}:${next}:${direction}`;
+    this.ensure(next, direction);
+  }
+
+  show(record) {
+    if (!record.hasFrame || !record.aligned || record.disposed) return;
+    if (this.visible !== record) {
+      for (const item of this.pool.values()) item.video.classList.toggle('is-current', item === record);
+      this.visible = record;
+      this.trim();
+    }
+  }
+
+  draw() { return Boolean(this.visible?.hasFrame); }
+  warm() {} // Playback preloads the next camera move, never the entire tour.
+  pumpWarm() { this.wake(); }
+  pause() { this.suspended = true; this.active?.video.pause(); clearTimeout(this.timer); this.timer = 0; }
+  resume() { this.suspended = false; this.wake(); }
+  unlock() {
+    if (!this.blocked) return;
+    this.blocked = false;
+    // Run inside the real pointer/touch gesture for browsers with stricter policies.
+    this.active?.video.play().catch(() => { this.blocked = true; });
+    this.resume();
+  }
+
+  snap(frame) {
+    this.active?.video.pause();
+    this.goal = this.frame = clamp(frame, 0, LAST);
+    this.active = null;
+    this.wake();
+  }
+
+  useCompatibility() {
+    if (this.quality === 'compat') return;
+    this.quality = 'compat';
+    this.stats.qualityChanges++;
+    document.documentElement.classList.add('compat-motion');
+    this.active?.video.pause();
+    this.active = null;
+    this.wake();
+  }
+
   layout(record) {
-    // All frames use the approved compilation's framing, while retaining source pixels.
     const scale = Math.max(this.rect.width / 864, this.rect.height / 496);
     const width = 864 * scale, height = 496 * scale;
     Object.assign(record.video.style, { width: `${width}px`, height: `${height}px`,
@@ -74,88 +246,42 @@ export class VideoPlayer {
   }
 
   resize(rect) {
-    const mobile = innerWidth <= 760 || (matchMedia('(pointer: coarse)').matches && innerWidth < 1100);
-    if (this.mobile !== undefined && this.mobile !== mobile) this.clear();
-    this.mobile = mobile;
     this.rect = rect;
+    if (navigator.connection?.saveData || navigator.hardwareConcurrency <= 4) this.useCompatibility();
     for (const record of this.pool.values()) this.layout(record);
   }
 
-  request(position) {
-    const frame = Math.round(Math.max(0, Math.min(TOTAL - 1, position)));
-    this.targetIndex = Math.min(5, Math.floor(frame / 145));
-    // Aim just inside a source frame to avoid timestamp rounding to its predecessor.
-    this.target = (frame - this.targetIndex * 145) / 24 + .00001;
-    const record = this.ensure(this.targetIndex);
-    const video = record.video;
-    if (video.readyState < 2 || video.seeking) return;
-    if (Math.abs(video.currentTime - this.target) < 1 / 240) { this.show(record); return; }
-    record.started = performance.now();
-    this.stats.requests++;
-    video.currentTime = this.target;
-  }
-
-  show(record) {
-    if (!record.hasFrame || record.disposed) return;
-    if (this.visibleIndex !== record.index) {
-      for (const entry of this.pool.values()) entry.video.classList.toggle('is-current', entry === record);
-      this.visibleIndex = record.index;
-    }
-    this.frame = record.presented;
-  }
-
-  draw() {
-    this.stats.paintRequests++;
-    const current = this.pool.get(this.targetIndex);
-    const ready = Boolean(current?.hasFrame && (this.visibleIndex === this.targetIndex || !current.video.seeking));
-    if (ready) this.show(current);
-    else this.stats.fallbacks++;
-    return ready || this.visibleIndex >= 0;
-  }
-
-  warm(fromFrame, toFrame) {
-    if (navigator.connection?.saveData || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    this.warmIndex = Math.min(5, Math.floor(toFrame / 145));
-    this.ensure(this.warmIndex);
-  }
-
-  pumpWarm() {}
-
-  trim() {
-    while (this.pool.size > 3) {
-      const candidate = [...this.pool.keys()].filter(index => index !== this.targetIndex && index !== this.visibleIndex && index !== this.warmIndex)
-        .sort((a, b) => Math.abs(b - this.targetIndex) - Math.abs(a - this.targetIndex))[0];
-      if (candidate === undefined) break;
-      this.release(candidate);
+  trim(protectedRecord) {
+    for (const [key, record] of this.pool) {
+      if (this.pool.size <= 3) break;
+      if (record !== protectedRecord && record !== this.active && record !== this.visible && key !== this.warmKey) this.release(key);
     }
   }
 
-  release(index) {
-    const record = this.pool.get(index);
+  release(key) {
+    const record = this.pool.get(key);
     if (!record) return;
     record.disposed = true;
     record.video.pause();
-    if (record.callback && record.video.cancelVideoFrameCallback) record.video.cancelVideoFrameCallback(record.callback);
-    record.video.removeAttribute('src');
-    record.video.load();
-    record.video.remove();
-    this.pool.delete(index);
+    if (record.callback) record.video.cancelVideoFrameCallback?.(record.callback);
+    record.video.removeAttribute('src'); record.video.load(); record.video.remove();
+    this.pool.delete(key);
     this.stats.released++;
   }
 
   clear() {
-    for (const index of [...this.pool.keys()]) this.release(index);
-    this.visibleIndex = -1;
+    clearTimeout(this.timer); this.timer = 0;
+    for (const key of [...this.pool.keys()]) this.release(key);
+    this.active = this.visible = null;
   }
 
   snapshot() {
-    const seeks = this.stats.seekTimes;
-    const record = this.pool.get(this.targetIndex);
-    return { ...this.stats, seekTimes: undefined,
+    const record = this.active, seeks = this.stats.seekTimes;
+    return { ...this.stats, seekTimes: undefined, engine: 'native-playback', quality: this.quality,
       seekMean: seeks.length ? seeks.reduce((a, b) => a + b, 0) / seeks.length : 0,
-      engine: 'hardware-video', activeVideos: this.pool.size, videoLimit: 3,
-      pending: record?.video.seeking ? 1 : 0, sourceFrame: record?.presented ?? -1,
-      sourceFrames: TOTAL, currentTime: record?.video.currentTime ?? 0,
+      activeVideos: this.pool.size, videoLimit: 3, sourceFrame: this.frame, targetFrame: this.goal,
+      sourceFrames: LAST + 1, moving: Boolean(record && (!record.video.paused || record.aligning)),
+      blocked: this.blocked, unavailable: this.unavailable, direction: this.direction, rate: record?.video.playbackRate ?? 0,
       videoSize: record ? [record.video.videoWidth, record.video.videoHeight] : [0, 0] };
   }
 }

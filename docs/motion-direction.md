@@ -30,3 +30,10 @@ Keep native Chrome preview, touch-friendly responsive layouts, shared vector ico
 - Video asset run complete: six selected drafts and a 36.25-second compilation, with the original six-second study clip restored at the owner's request. Total paid cost $1.9146168; the run is closed. The owner said the overall results were good. Some crossing geometry shifts and a long foreground-column occlusion remain documented. The website now uses these saved native clips for scroll-controlled movement, with liquid-glass panels and distinct CTAs. Camera travel occupies the first half of each chapter, followed by a reading hold. Portrait mobile retains the whole room above the same content and icons. Reduced motion uses the corresponding stills. Performance and browser checks are recorded in `performance.md`.
 
 Prototype 1 remains at its existing GitHub Pages URL and its `prototype-1` tag. Prototype 2 has its own repository and separate Pages preview. Account CTAs are previews, not a connected authentication service.
+
+
+## Mobile, navigation and VDI revision — 2026-11-02
+
+The camera now follows the scroll destination with native forward/reverse playback instead of continuous random seeks. UI panels follow the camera actually presented, so fast touch gestures and chapter shortcuts cannot flash unrelated content while a decoder catches up. Mobile uses the desktop camera sequence, chapter heights and reading holds. Navigation uses a distance-based eased scroll and can be interrupted by natural wheel, touch or keyboard input.
+
+Keep original desktop resolution. Use locally encoded 640×368 baseline H.264 on small-core or limited-decoder devices; reverse assets avoid unsupported negative playback rates. Reduced-motion, blocked-autoplay and unavailable-video cases retain usable content and the explicit full-tour viewer. Do not promise consistent FPS across all VDI hardware or remote-display configurations, or claim that the actual work PC has been tested.
