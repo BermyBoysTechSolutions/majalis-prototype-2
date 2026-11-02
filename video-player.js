@@ -105,7 +105,10 @@ export class VideoPlayer {
   present(record, time) {
     if (record !== this.active || !record.aligned || record.aligning || record.disposed) return;
     this.stats.presented++;
-    this.frame = this.worldFrame(record, time);
+    // A final frame callback can arrive after `ended`, carrying an older frame.
+    // Keep the exact endpoint so fast reverse playback advances to the next clip.
+    this.frame = record.video.ended ? record.index * LENGTH + (record.direction > 0 ? 144 : 0) :
+      this.worldFrame(record, time);
     this.show(record);
     // Stop as soon as the presented camera passes the scroll target.
     if ((this.goal - this.frame) * record.direction < .6) record.video.pause();
@@ -137,6 +140,9 @@ export class VideoPlayer {
     const stable = performance.now() - this.goalChanged > 100;
     if (this.unavailable) { this.frame = this.goal; return; }
     if (this.suspended) return;
+    if (this.active?.aligned && !this.active.aligning && this.active.video.ended) {
+      this.frame = this.active.index * LENGTH + (this.active.direction > 0 ? 144 : 0);
+    }
     const delta = this.goal - this.frame;
     if (stable && this.active?.aligned && this.active.video.paused && Math.abs(delta) < 4.5 &&
         Math.floor(this.goal / LENGTH) === this.active.index) {

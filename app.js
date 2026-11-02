@@ -1,8 +1,12 @@
-import { VideoPlayer } from './video-player.js?v=room-6';
+import { VideoPlayer } from './video-player.js?v=room-7';
 
 const root = document.documentElement;
 const chapters = [...document.querySelectorAll('.chapter')];
+const journey = document.querySelector('#journey');
 const panels = [...document.querySelectorAll('[data-panel]')];
+const mobilePanels = document.createElement('div');
+mobilePanels.className = 'mobile-panels';
+journey.prepend(mobilePanels);
 const rail = [...document.querySelectorAll('.chapter-nav a')];
 const checkpoints = [0, 144, 289, 434, 579, 724, 869];
 const labels = ['Welcome to the majlis', 'Islamic knowledge', 'Technology & content', 'Business & finance', 'Health & fitness', 'The community hub', 'A place for you'];
@@ -18,19 +22,20 @@ const clamp = value => Math.max(0, Math.min(1, value));
 const smooth = value => { const t = clamp(value); return t * t * (3 - 2 * t); };
 let dimensions = [];
 let maxScroll = 1;
-let targetScroll = scrollY;
-let currentScroll = scrollY;
+let targetScroll = scrollPosition();
+let currentScroll = scrollPosition();
 let previousTime = 0;
 let previousFrame = 0;
 let raf = 0;
 let activeChapter = -1;
 let posterIndex = -1;
-let presentationScroll = scrollY;
+let presentationScroll = scrollPosition();
 let presentationSettling = false;
 let navigation = null;
 let measuredWidth = innerWidth;
 let mobileStageWidth = 0;
 let mobileStageHeight = 0;
+let portraitScrolling = portrait.matches;
 let modalOpen = false;
 let resizeFrame = 0;
 const panelStates = new Map();
@@ -40,7 +45,26 @@ function wake() {
 }
 const player = new VideoPlayer(document.querySelector('#room-canvas'), wake);
 
+function scrollPosition() {
+  return portrait.matches ? journey.scrollTop : window.scrollY;
+}
+
+function scrollJourney(top, behavior = 'instant') {
+  (portrait.matches ? journey : window).scrollTo({ top, behavior });
+}
+
 function measure() {
+  const modeChanged = portraitScrolling !== portrait.matches;
+  const previousState = modeChanged && dimensions.length ? sample(currentScroll) : null;
+  portraitScrolling = portrait.matches;
+  if (portrait.matches) journey.tabIndex = 0;
+  else journey.removeAttribute('tabindex');
+  // A sticky layer belongs to the tour's native scroll chain. Viewport-fixed
+  // descendants can otherwise send a swipe over the card to the outer page.
+  panels.forEach((panel, index) => {
+    const parent = portrait.matches ? mobilePanels : chapters[index];
+    if (panel.parentElement !== parent) parent.append(panel);
+  });
   if (portrait.matches) {
     // Freeze the phone stage while browser bars expand/collapse. A width change
     // or a substantial resize still reflows it for rotation/window resizing.
@@ -61,9 +85,15 @@ function measure() {
     root.classList.remove('compact-mobile-stage');
     root.classList.remove('short-mobile-stage');
   }
-  dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top + scrollY, height: section.offsetHeight }));
-  maxScroll = Math.max(1, document.documentElement.scrollHeight - innerHeight);
-  targetScroll = Math.max(0, Math.min(maxScroll, scrollY));
+  const origin = portrait.matches ? journey.getBoundingClientRect().top : 0;
+  dimensions = chapters.map(section => ({ top: section.getBoundingClientRect().top - origin + scrollPosition(), height: section.offsetHeight }));
+  maxScroll = Math.max(1, portrait.matches ? journey.scrollHeight - journey.clientHeight : document.documentElement.scrollHeight - innerHeight);
+  if (previousState) {
+    const section = dimensions[previousState.index];
+    const distance = previousState.index === 6 ? maxScroll - section.top : section.height;
+    scrollJourney(section.top + previousState.local * distance);
+  }
+  targetScroll = Math.max(0, Math.min(maxScroll, scrollPosition()));
   if (Math.abs(measuredWidth - innerWidth) > 2) {
     cancelNavigation();
     currentScroll = presentationScroll = targetScroll;
@@ -187,8 +217,8 @@ function tick(time) {
     const arrival = cameraPosition(navigation.toFrame);
     const top = t === 0 ? navigation.from : eased < .92 ? cameraPosition(frame) :
       arrival + (navigation.to - arrival) * ((eased - .92) / .08);
-    scrollTo({ top, behavior: 'instant' });
-    targetScroll = scrollY;
+    scrollJourney(top);
+    targetScroll = scrollPosition();
     if (t === 1) navigation = null;
   }
   const delta = previousTime ? Math.min(64, time - previousTime) : 16.67;
@@ -211,13 +241,13 @@ function jump(index, instant = false) {
   if (instant || reduced.matches) {
     navigation = null;
     player.snap(checkpoints[index]);
-    scrollTo({ top: to, behavior: 'instant' });
-    targetScroll = currentScroll = presentationScroll = scrollY;
+    scrollJourney(to);
+    targetScroll = currentScroll = presentationScroll = scrollPosition();
   } else {
     const distance = Math.abs(checkpoints[index] - player.frame);
     const home = index === 0;
     if (home) player.setNavigationSpeed(2);
-    navigation = { from: scrollY, to, fromFrame: player.frame, toFrame: checkpoints[index],
+    navigation = { from: scrollPosition(), to, fromFrame: player.frame, toFrame: checkpoints[index],
       started: 0, duration: home ? Math.max(1100, (distance / 24 / 3.3 * 1000 + 600) / 2) :
         Math.max(1900, distance / 24 / 3.3 * 1000 + 600) };
   }
@@ -231,9 +261,9 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     event.preventDefault();
     if (link.classList.contains('skip-link')) {
       jump(index, true);
-      targetScroll = currentScroll = scrollY;
+      targetScroll = currentScroll = scrollPosition();
       render(currentScroll);
-      const heading = chapters[index].querySelector('h1,h2');
+      const heading = panels[index].querySelector('h1,h2');
       heading.tabIndex = -1;
       heading.focus({ preventScroll: true });
     } else jump(index);
@@ -246,7 +276,12 @@ addEventListener('pointerdown', () => { cancelNavigation(); player.unlock(); }, 
 addEventListener('keydown', event => {
   if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) cancelNavigation();
 });
-addEventListener('scroll', () => { targetScroll = Math.max(0, Math.min(maxScroll, scrollY)); wake(); }, { passive: true });
+function onJourneyScroll() {
+  targetScroll = Math.max(0, Math.min(maxScroll, scrollPosition()));
+  wake();
+}
+addEventListener('scroll', onJourneyScroll, { passive: true });
+journey.addEventListener('scroll', onJourneyScroll, { passive: true });
 addEventListener('resize', () => {
   if (resizeFrame) return;
   resizeFrame = requestAnimationFrame(() => { resizeFrame = 0; measure(); });
@@ -258,7 +293,7 @@ reduced.addEventListener('change', () => {
 });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { player.pause(); cancelAnimationFrame(raf); raf = 0; previousTime = 0; }
-  else { targetScroll = scrollY; player.resume(); wake(); }
+  else { targetScroll = scrollPosition(); player.resume(); wake(); }
 });
 addEventListener('pagehide', () => player.clear());
 addEventListener('pageshow', () => measure());
@@ -310,7 +345,7 @@ document.querySelectorAll('dialog').forEach(dialog => {
     player.resume();
     document.body.classList.remove('dialog-open');
     dialogTrigger?.focus({ preventScroll: true });
-    targetScroll = scrollY;
+    targetScroll = scrollPosition();
     wake();
   });
 });
@@ -322,6 +357,7 @@ const initial = chapters.findIndex(section => `#${section.id}` === location.hash
 if (initial > 0) requestAnimationFrame(() => jump(initial, true));
 window.__majalis = {
   snapshot: () => ({ chapter: activeChapter, targetScroll, currentScroll, frame: previousFrame, reduced: reduced.matches,
+    scrollSurface: portrait.matches ? 'journey' : 'window', scrollPosition: scrollPosition(),
     running: Boolean(raf), navigating: Boolean(navigation), presentationScroll, maxScroll, sections: dimensions.map((d, i) => ({ ...d, id: chapters[i].id })), ...player.snapshot() }),
   jump: index => jump(index, true),
   navigate: index => jump(index),
